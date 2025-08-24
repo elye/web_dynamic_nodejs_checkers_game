@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Checkers Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Game Header -->
+        <header class="game-header">
+            <h1>🔴 Online Checkers ⚫</h1>
+            <div class="game-info">
+                <div class="room-info">
+                    <span class="room-code-display">Room: <span id="current-room-code">-</span></span>
+                    <button id="copy-room-code" class="btn btn-small" title="Copy room code">📋</button>
+                </div>
+                <div class="turn-indicator">
+                    <span id="turn-display">Waiting for players...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Room Selection -->
+        <div id="room-selection" class="room-selection">
+            <div class="room-card">
+                <h2>Join Game</h2>
+                <div class="input-group">
+                    <input type="text" id="player-name" placeholder="Your name" maxlength="20">
+                </div>
+                <div class="room-options">
+                    <div class="room-option">
+                        <h3>Create New Room</h3>
+                        <button id="create-room" class="btn btn-primary">Create Room</button>
+                    </div>
+                    <div class="room-option">
+                        <h3>Join Existing Room</h3>
+                        <div class="input-group">
+                            <input type="text" id="room-code-input" placeholder="Enter room code" maxlength="6">
+                            <button id="join-room" class="btn btn-secondary">Join Room</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Board -->
+        <div id="game-container" class="game-container hidden">
+            <!-- Player Info -->
+            <div class="players-info">
+                <div class="player-card red-player">
+                    <div class="player-color red"></div>
+                    <span id="red-player-name">Player 1</span>
+                </div>
+                <div class="player-card black-player">
+                    <div class="player-color black"></div>
+                    <span id="black-player-name">Player 2</span>
+                </div>
+            </div>
+
+            <!-- Checkers Board -->
+            <div class="board-container">
+                <div id="game-board" class="board">
+                    <!-- Board will be generated dynamically -->
+                </div>
+            </div>
+
+            <!-- Game Controls -->
+            <div class="game-controls">
+                <button id="reset-game" class="btn btn-secondary">New Game</button>
+                <button id="leave-room" class="btn btn-danger">Leave Room</button>
+            </div>
+        </div>
+
+        <!-- Game Status Messages -->
+        <div id="game-messages" class="game-messages">
+            <!-- Messages will be added dynamically -->
+        </div>
+
+        <!-- Connection Status -->
+        <div id="connection-status" class="connection-status">
+            <span class="status-indicator" id="status-indicator">●</span>
+            <span id="status-text">Connecting...</span>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="game-over-title">Game Over</h2>
+            <p id="game-over-message">Player wins!</p>
+            <div class="modal-actions">
+                <button id="play-again" class="btn btn-primary">Play Again</button>
+                <button id="close-modal" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

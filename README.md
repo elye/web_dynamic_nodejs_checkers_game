@@ -136,6 +136,26 @@ checkers-game/
 
 ## Deployment
 
+### 🚀 Deploy to Render.com (Recommended)
+
+**Quick Deployment:**
+1. Push your code to GitHub
+2. Sign up at [render.com](https://render.com) 
+3. Create new Web Service from your GitHub repo
+4. Configure:
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+5. Deploy! Your game will be live at `https://your-app-name.onrender.com`
+
+📚 **Detailed guide**: See `RENDER_DEPLOYMENT.md` for complete instructions
+
+**Why Render?**
+- ✅ Free tier available
+- ✅ Perfect Socket.io/WebSocket support  
+- ✅ Auto-deploy from Git
+- ✅ Automatic HTTPS
+- ✅ No configuration needed
+
 ### Local Development
 The game runs on `http://localhost:3000` by default.
 

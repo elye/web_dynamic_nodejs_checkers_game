@@ -1,0 +1,14 @@
+# Optional Render configuration file
+# This helps Render understand your project better
+
+services:
+  - type: web
+    name: checkers-game
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production

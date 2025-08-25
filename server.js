@@ -414,6 +414,16 @@ function generateRoomCode() {
 }
 
 // API Routes
+// Health check endpoint for monitoring
+app.get('/', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        message: 'Checkers Game Server Running',
+        timestamp: new Date().toISOString(),
+        activeRooms: games.size
+    });
+});
+
 app.post('/api/create-room', (req, res) => {
     const roomCode = generateRoomCode();
     const game = new CheckersGame(roomCode);

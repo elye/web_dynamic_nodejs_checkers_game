@@ -288,7 +288,14 @@ class CheckersClient {
 
     handlePossibleMoves(data) {
         console.log('Possible moves:', data);
-        this.possibleMoves = data.moves;
+        
+        // Convert server coordinates to display coordinates
+        const shouldRotate = this.playerColor === 'red';
+        this.possibleMoves = data.moves.map(move => ({
+            row: shouldRotate ? (7 - move.row) : move.row,
+            col: shouldRotate ? (7 - move.col) : move.col
+        }));
+        
         this.highlightPossibleMoves();
     }
 
@@ -321,6 +328,13 @@ class CheckersClient {
         
         // Update board
         this.updateBoard();
+        
+        // Show board orientation message for testing
+        if (this.playerColor === 'red') {
+            this.showMessage('🔴 Board rotated: Your red pieces are at the bottom!', 'info');
+        } else if (this.playerColor === 'black') {
+            this.showMessage('⚫ Standard view: Your black pieces are at the bottom!', 'info');
+        }
     }
 
     updateTurnDisplay() {
@@ -357,65 +371,83 @@ class CheckersClient {
         
         this.clearBoard();
         
+        // Determine if we should rotate the board (for red player)
+        const shouldRotate = this.playerColor === 'red';
+        
+        // Add visual class to indicate rotation
+        if (shouldRotate) {
+            this.gameBoard.classList.add('rotated-for-red');
+        } else {
+            this.gameBoard.classList.remove('rotated-for-red');
+        }
+        
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
-                const square = this.createSquare(row, col);
+                // Calculate display position (rotate for red player)
+                const displayRow = shouldRotate ? (7 - row) : row;
+                const displayCol = shouldRotate ? (7 - col) : col;
+                
+                const square = this.createSquare(displayRow, displayCol, row, col);
                 this.gameBoard.appendChild(square);
                 
                 const piece = this.gameState.board[row][col];
                 if (piece) {
-                    const pieceElement = this.createPiece(piece, row, col);
+                    const pieceElement = this.createPiece(piece, displayRow, displayCol, row, col);
                     square.appendChild(pieceElement);
                 }
             }
         }
     }
 
-    createSquare(row, col) {
+    createSquare(displayRow, displayCol, serverRow, serverCol) {
         const square = document.createElement('div');
-        square.className = `square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
-        square.dataset.row = row;
-        square.dataset.col = col;
+        square.className = `square ${(displayRow + displayCol) % 2 === 0 ? 'light' : 'dark'}`;
+        square.dataset.displayRow = displayRow;
+        square.dataset.displayCol = displayCol;
+        square.dataset.serverRow = serverRow;
+        square.dataset.serverCol = serverCol;
         
-        square.addEventListener('click', (e) => this.handleSquareClick(row, col, e));
+        square.addEventListener('click', (e) => this.handleSquareClick(displayRow, displayCol, serverRow, serverCol, e));
         
         return square;
     }
 
-    createPiece(piece, row, col) {
+    createPiece(piece, displayRow, displayCol, serverRow, serverCol) {
         const pieceElement = document.createElement('div');
         pieceElement.className = `piece ${piece.color}${piece.king ? ' king' : ''}`;
-        pieceElement.dataset.row = row;
-        pieceElement.dataset.col = col;
+        pieceElement.dataset.displayRow = displayRow;
+        pieceElement.dataset.displayCol = displayCol;
+        pieceElement.dataset.serverRow = serverRow;
+        pieceElement.dataset.serverCol = serverCol;
         
         // Add drag and drop support
         pieceElement.draggable = true;
-        pieceElement.addEventListener('dragstart', (e) => this.handleDragStart(e, row, col));
+        pieceElement.addEventListener('dragstart', (e) => this.handleDragStart(e, displayRow, displayCol, serverRow, serverCol));
         pieceElement.addEventListener('dragend', (e) => this.handleDragEnd(e));
         
         return pieceElement;
     }
 
-    handleSquareClick(row, col, event) {
+    handleSquareClick(displayRow, displayCol, serverRow, serverCol, event) {
         event.stopPropagation();
         
         if (!this.isMyTurn || this.gameState.gameState !== 'playing') {
             return;
         }
 
-        const piece = this.gameState.board[row][col];
+        const piece = this.gameState.board[serverRow][serverCol];
         
         // If clicking on own piece, select it
         if (piece && piece.color === this.playerColor) {
-            this.selectPiece(row, col);
+            this.selectPiece(displayRow, displayCol, serverRow, serverCol);
             return;
         }
         
         // If clicking on empty square and have selected piece, try to move
         if (!piece && this.selectedPiece) {
-            const isPossibleMove = this.possibleMoves.some(move => move.row === row && move.col === col);
+            const isPossibleMove = this.possibleMoves.some(move => move.row === displayRow && move.col === displayCol);
             if (isPossibleMove) {
-                this.makeMove(this.selectedPiece.row, this.selectedPiece.col, row, col);
+                this.makeMove(this.selectedPiece.serverRow, this.selectedPiece.serverCol, serverRow, serverCol);
             }
             return;
         }
@@ -424,23 +456,23 @@ class CheckersClient {
         this.clearSelection();
     }
 
-    handleDragStart(event, row, col) {
+    handleDragStart(event, displayRow, displayCol, serverRow, serverCol) {
         if (!this.isMyTurn || this.gameState.gameState !== 'playing') {
             event.preventDefault();
             return;
         }
         
-        const piece = this.gameState.board[row][col];
+        const piece = this.gameState.board[serverRow][serverCol];
         if (!piece || piece.color !== this.playerColor) {
             event.preventDefault();
             return;
         }
         
-        this.selectPiece(row, col);
+        this.selectPiece(displayRow, displayCol, serverRow, serverCol);
         event.target.classList.add('dragging');
         
         // Set drag data
-        event.dataTransfer.setData('text/plain', JSON.stringify({ row, col }));
+        event.dataTransfer.setData('text/plain', JSON.stringify({ displayRow, displayCol, serverRow, serverCol }));
         event.dataTransfer.effectAllowed = 'move';
         
         // Add drop listeners to valid targets
@@ -469,10 +501,10 @@ class CheckersClient {
     }
 
     handleDragOver = (event) => {
-        const row = parseInt(event.currentTarget.dataset.row);
-        const col = parseInt(event.currentTarget.dataset.col);
+        const displayRow = parseInt(event.currentTarget.dataset.displayRow);
+        const displayCol = parseInt(event.currentTarget.dataset.displayCol);
         
-        const isPossibleMove = this.possibleMoves.some(move => move.row === row && move.col === col);
+        const isPossibleMove = this.possibleMoves.some(move => move.row === displayRow && move.col === displayCol);
         if (isPossibleMove) {
             event.preventDefault();
             event.dataTransfer.dropEffect = 'move';
@@ -482,30 +514,32 @@ class CheckersClient {
     handleDrop = (event) => {
         event.preventDefault();
         
-        const row = parseInt(event.currentTarget.dataset.row);
-        const col = parseInt(event.currentTarget.dataset.col);
+        const displayRow = parseInt(event.currentTarget.dataset.displayRow);
+        const displayCol = parseInt(event.currentTarget.dataset.displayCol);
+        const serverRow = parseInt(event.currentTarget.dataset.serverRow);
+        const serverCol = parseInt(event.currentTarget.dataset.serverCol);
         
         if (this.selectedPiece) {
-            const isPossibleMove = this.possibleMoves.some(move => move.row === row && move.col === col);
+            const isPossibleMove = this.possibleMoves.some(move => move.row === displayRow && move.col === displayCol);
             if (isPossibleMove) {
-                this.makeMove(this.selectedPiece.row, this.selectedPiece.col, row, col);
+                this.makeMove(this.selectedPiece.serverRow, this.selectedPiece.serverCol, serverRow, serverCol);
             }
         }
     }
 
-    selectPiece(row, col) {
+    selectPiece(displayRow, displayCol, serverRow, serverCol) {
         this.clearSelection();
         
-        this.selectedPiece = { row, col };
+        this.selectedPiece = { displayRow, displayCol, serverRow, serverCol };
         
-        // Highlight selected square
-        const square = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+        // Highlight selected square using display coordinates
+        const square = document.querySelector(`[data-display-row="${displayRow}"][data-display-col="${displayCol}"]`);
         if (square) {
             square.classList.add('selected');
         }
         
-        // Get possible moves
-        this.socket.emit('get-possible-moves', { row, col });
+        // Get possible moves using server coordinates
+        this.socket.emit('get-possible-moves', { row: serverRow, col: serverCol });
     }
 
     clearSelection() {
@@ -524,9 +558,9 @@ class CheckersClient {
             square.classList.remove('possible-move');
         });
         
-        // Add highlights for possible moves
+        // Add highlights for possible moves using display coordinates
         this.possibleMoves.forEach(move => {
-            const square = document.querySelector(`[data-row="${move.row}"][data-col="${move.col}"]`);
+            const square = document.querySelector(`[data-display-row="${move.row}"][data-display-col="${move.col}"]`);
             if (square) {
                 square.classList.add('possible-move');
             }

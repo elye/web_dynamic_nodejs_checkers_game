@@ -446,6 +446,15 @@ body {
     flex-wrap: wrap;
 }
 
+/* Board Rotation for Red Player */
+.board.rotated-for-red {
+    transform: rotate(180deg);
+}
+
+.board.rotated-for-red .piece {
+    transform: rotate(180deg);
+}
+
 /* Utility Classes */
 .hidden {
     display: none !important;

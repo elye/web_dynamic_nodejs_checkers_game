@@ -335,6 +335,11 @@ class CheckersClient {
         // Update board
         this.updateBoard();
         
+        // Update piece visuals after board update
+        setTimeout(() => {
+            this.updatePieceVisuals();
+        }, 50);
+        
         // Auto-select capturing piece if it's our turn and we must continue capturing
         if (this.gameState.mustCapture && this.gameState.capturingPiece && this.isMyTurn && !this.selectedPiece) {
             // Use a small timeout to ensure the board is updated first
@@ -365,6 +370,77 @@ class CheckersClient {
             }
             
             turnIndicator.className = `turn-indicator ${this.gameState.currentPlayer}-turn`;
+        }
+        
+        // Update piece visuals when turn changes
+        this.updatePieceVisuals();
+    }
+
+    updatePieceVisuals() {
+        // Re-evaluate piece selectability and update visual indicators
+        const pieces = document.querySelectorAll('.piece');
+        let captureableCount = 0;
+        let hasMandatory = false;
+        
+        pieces.forEach(pieceElement => {
+            const serverRow = parseInt(pieceElement.dataset.serverRow);
+            const serverCol = parseInt(pieceElement.dataset.serverCol);
+            const piece = this.gameState.board[serverRow][serverCol];
+            
+            if (piece && this.isMyTurn && piece.color === this.playerColor && this.gameState.gameState === 'playing') {
+                // Remove existing state classes
+                pieceElement.classList.remove('disabled', 'must-capture');
+                
+                if (this.gameState.mustCapture && this.gameState.capturingPiece) {
+                    // If we must continue capturing with a specific piece
+                    const capturingPiece = this.gameState.capturingPiece;
+                    if (serverRow === capturingPiece.row && serverCol === capturingPiece.col) {
+                        pieceElement.classList.add('must-capture');
+                        pieceElement.draggable = true;
+                        captureableCount = 1;
+                    } else {
+                        pieceElement.classList.add('disabled');
+                        pieceElement.draggable = false;
+                    }
+                    hasMandatory = true;
+                } else {
+                    // Check for mandatory captures
+                    const mandatoryCaptures = this.hasMandatoryCaptures();
+                    if (mandatoryCaptures) {
+                        hasMandatory = true;
+                        if (this.pieceHasCaptures(serverRow, serverCol)) {
+                            pieceElement.classList.add('must-capture');
+                            pieceElement.draggable = true;
+                            captureableCount++;
+                        } else {
+                            pieceElement.classList.add('disabled');
+                            pieceElement.draggable = false;
+                        }
+                    } else {
+                        // No mandatory captures, piece is selectable
+                        pieceElement.draggable = true;
+                    }
+                }
+            } else {
+                // Not our turn or not our piece - remove all state classes and disable dragging
+                pieceElement.classList.remove('disabled', 'must-capture');
+                if (piece && piece.color !== this.playerColor) {
+                    pieceElement.draggable = false;
+                }
+            }
+        });
+        
+        // Show helpful message when mandatory captures are detected
+        if (this.isMyTurn && hasMandatory && captureableCount > 0) {
+            if (this.gameState.mustCapture && this.gameState.capturingPiece) {
+                // Continue capturing message is already shown in autoSelectCapturingPiece
+            } else {
+                // New mandatory capture situation
+                const message = captureableCount === 1 ? 
+                    '⚡ Mandatory capture! Click on the glowing piece to capture.' : 
+                    `⚡ Mandatory captures available! ${captureableCount} pieces can capture.`;
+                this.showMessage(message, 'info');
+            }
         }
     }
 
@@ -421,16 +497,45 @@ class CheckersClient {
 
     createPiece(piece, displayRow, displayCol, serverRow, serverCol) {
         const pieceElement = document.createElement('div');
-        pieceElement.className = `piece ${piece.color}${piece.king ? ' king' : ''}`;
+        let pieceClass = `piece ${piece.color}${piece.king ? ' king' : ''}`;
+        
+        // Add visual indicators for piece selectability
+        if (this.isMyTurn && piece.color === this.playerColor && this.gameState.gameState === 'playing') {
+            if (this.gameState.mustCapture && this.gameState.capturingPiece) {
+                // If we must continue capturing with a specific piece
+                const capturingPiece = this.gameState.capturingPiece;
+                if (serverRow === capturingPiece.row && serverCol === capturingPiece.col) {
+                    pieceClass += ' must-capture';
+                } else {
+                    pieceClass += ' disabled';
+                }
+            } else {
+                // Check for mandatory captures
+                const hasMandatory = this.hasMandatoryCaptures();
+                if (hasMandatory) {
+                    if (this.pieceHasCaptures(serverRow, serverCol)) {
+                        pieceClass += ' must-capture';
+                    } else {
+                        pieceClass += ' disabled';
+                    }
+                }
+            }
+        }
+        
+        pieceElement.className = pieceClass;
         pieceElement.dataset.displayRow = displayRow;
         pieceElement.dataset.displayCol = displayCol;
         pieceElement.dataset.serverRow = serverRow;
         pieceElement.dataset.serverCol = serverCol;
         
-        // Add drag and drop support
-        pieceElement.draggable = true;
-        pieceElement.addEventListener('dragstart', (e) => this.handleDragStart(e, displayRow, displayCol, serverRow, serverCol));
-        pieceElement.addEventListener('dragend', (e) => this.handleDragEnd(e));
+        // Add drag and drop support (only if piece is not disabled)
+        if (!pieceClass.includes('disabled')) {
+            pieceElement.draggable = true;
+            pieceElement.addEventListener('dragstart', (e) => this.handleDragStart(e, displayRow, displayCol, serverRow, serverCol));
+            pieceElement.addEventListener('dragend', (e) => this.handleDragEnd(e));
+        } else {
+            pieceElement.draggable = false;
+        }
         
         return pieceElement;
     }
@@ -444,20 +549,25 @@ class CheckersClient {
 
         const piece = this.gameState.board[serverRow][serverCol];
         
-        // If must capture with specific piece, only allow that piece to be selected
-        if (this.gameState.mustCapture && this.gameState.capturingPiece) {
-            const capturingPiece = this.gameState.capturingPiece;
-            
-            // If clicking on a piece that's not the capturing piece, show warning
-            if (piece && piece.color === this.playerColor && 
-                (serverRow !== capturingPiece.row || serverCol !== capturingPiece.col)) {
-                this.showMessage('⚠️ Must continue capturing with the highlighted piece!', 'error');
-                return;
-            }
-        }
-        
-        // If clicking on own piece, select it
+        // If clicking on own piece, check if it can be selected
         if (piece && piece.color === this.playerColor) {
+            // If must capture with specific piece, only allow that piece to be selected
+            if (this.gameState.mustCapture && this.gameState.capturingPiece) {
+                const capturingPiece = this.gameState.capturingPiece;
+                
+                // If clicking on a piece that's not the capturing piece, prevent selection
+                if (serverRow !== capturingPiece.row || serverCol !== capturingPiece.col) {
+                    this.showMessage('⚠️ Must continue capturing with the highlighted piece!', 'error');
+                    return;
+                }
+            } else {
+                // Check if there are mandatory captures and this piece has no captures
+                if (this.hasMandatoryCaptures() && !this.pieceHasCaptures(serverRow, serverCol)) {
+                    this.showMessage('⚠️ Must capture when possible!', 'error');
+                    return;
+                }
+            }
+            
             this.selectPiece(displayRow, displayCol, serverRow, serverCol);
             return;
         }
@@ -473,6 +583,60 @@ class CheckersClient {
         
         // Otherwise, clear selection
         this.clearSelection();
+    }
+
+    hasMandatoryCaptures() {
+        if (!this.gameState || !this.gameState.board) return false;
+        
+        // Check if any of the current player's pieces can capture
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const piece = this.gameState.board[row][col];
+                if (piece && piece.color === this.playerColor) {
+                    if (this.pieceHasCaptures(row, col)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    pieceHasCaptures(row, col) {
+        if (!this.gameState || !this.gameState.board) return false;
+        
+        const piece = this.gameState.board[row][col];
+        if (!piece || piece.color !== this.playerColor) return false;
+
+        // Define movement directions based on piece type
+        const directions = piece.king ? 
+            [[-1, -1], [-1, 1], [1, -1], [1, 1]] : 
+            piece.color === 'red' ? 
+                [[1, -1], [1, 1]] : 
+                [[-1, -1], [-1, 1]];
+
+        // Check each direction for possible captures
+        for (const [dRow, dCol] of directions) {
+            const captureRow = row + dRow;
+            const captureCol = col + dCol;
+            const landRow = row + 2 * dRow;
+            const landCol = col + 2 * dCol;
+
+            // Check if positions are within bounds
+            if (landRow >= 0 && landRow < 8 && landCol >= 0 && landCol < 8) {
+                const capturedPiece = this.gameState.board[captureRow][captureCol];
+                const landSquare = this.gameState.board[landRow][landCol];
+
+                // Check if there's an opponent piece to capture and landing square is empty
+                if (capturedPiece && 
+                    capturedPiece.color !== piece.color && 
+                    !landSquare) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     handleDragStart(event, displayRow, displayCol, serverRow, serverCol) {
@@ -493,6 +657,13 @@ class CheckersClient {
             if (serverRow !== capturingPiece.row || serverCol !== capturingPiece.col) {
                 event.preventDefault();
                 this.showMessage('⚠️ Must continue capturing with the highlighted piece!', 'error');
+                return;
+            }
+        } else {
+            // Check if there are mandatory captures and this piece has no captures
+            if (this.hasMandatoryCaptures() && !this.pieceHasCaptures(serverRow, serverCol)) {
+                event.preventDefault();
+                this.showMessage('⚠️ Must capture when possible!', 'error');
                 return;
             }
         }

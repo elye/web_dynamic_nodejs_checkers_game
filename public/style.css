@@ -376,6 +376,50 @@ body {
     background: radial-gradient(circle at 30% 30%, #4a4a4a, #2c3e50);
 }
 
+.piece.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: grayscale(0.5);
+    transform: none !important;
+}
+
+.piece.disabled:hover {
+    transform: none !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+.piece.must-capture {
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.3);
+    border-color: #FFD700;
+    animation: glow-capture 2s ease-in-out infinite;
+    position: relative;
+}
+
+.piece.must-capture::before {
+    content: '⚡';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    font-size: 0.8rem;
+    color: #FFD700;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    animation: bounce-icon 1s ease-in-out infinite;
+}
+
+@keyframes bounce-icon {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+@keyframes glow-capture {
+    0%, 100% { 
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+    50% { 
+        box-shadow: 0 0 25px rgba(255, 215, 0, 1), 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+}
+
 .piece.king::after {
     content: '♔';
     position: absolute;

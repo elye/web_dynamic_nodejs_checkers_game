@@ -257,6 +257,11 @@ class CheckersClient {
         if (data.promoted) {
             this.showMessage('Piece promoted to king!', 'success');
         }
+        
+        // Auto-select piece for continued capturing
+        if (this.gameState.mustCapture && this.gameState.capturingPiece && this.isMyTurn) {
+            this.autoSelectCapturingPiece();
+        }
     }
 
     handleMoveError(data) {
@@ -328,6 +333,14 @@ class CheckersClient {
         
         // Update board
         this.updateBoard();
+        
+        // Auto-select capturing piece if it's our turn and we must continue capturing
+        if (this.gameState.mustCapture && this.gameState.capturingPiece && this.isMyTurn && !this.selectedPiece) {
+            // Use a small timeout to ensure the board is updated first
+            setTimeout(() => {
+                this.autoSelectCapturingPiece();
+            }, 100);
+        }
         
         // Show board orientation message for testing
         if (this.playerColor === 'red') {
@@ -437,6 +450,18 @@ class CheckersClient {
 
         const piece = this.gameState.board[serverRow][serverCol];
         
+        // If must capture with specific piece, only allow that piece to be selected
+        if (this.gameState.mustCapture && this.gameState.capturingPiece) {
+            const capturingPiece = this.gameState.capturingPiece;
+            
+            // If clicking on a piece that's not the capturing piece, show warning
+            if (piece && piece.color === this.playerColor && 
+                (serverRow !== capturingPiece.row || serverCol !== capturingPiece.col)) {
+                this.showMessage('⚠️ Must continue capturing with the highlighted piece!', 'error');
+                return;
+            }
+        }
+        
         // If clicking on own piece, select it
         if (piece && piece.color === this.playerColor) {
             this.selectPiece(displayRow, displayCol, serverRow, serverCol);
@@ -466,6 +491,16 @@ class CheckersClient {
         if (!piece || piece.color !== this.playerColor) {
             event.preventDefault();
             return;
+        }
+        
+        // If must capture with specific piece, only allow that piece to be dragged
+        if (this.gameState.mustCapture && this.gameState.capturingPiece) {
+            const capturingPiece = this.gameState.capturingPiece;
+            if (serverRow !== capturingPiece.row || serverCol !== capturingPiece.col) {
+                event.preventDefault();
+                this.showMessage('⚠️ Must continue capturing with the highlighted piece!', 'error');
+                return;
+            }
         }
         
         this.selectPiece(displayRow, displayCol, serverRow, serverCol);
@@ -550,6 +585,33 @@ class CheckersClient {
         document.querySelectorAll('.square').forEach(square => {
             square.classList.remove('selected', 'possible-move');
         });
+    }
+
+    autoSelectCapturingPiece() {
+        if (!this.gameState.capturingPiece) return;
+        
+        const { row: serverRow, col: serverCol } = this.gameState.capturingPiece;
+        
+        // Calculate display coordinates (rotate for red player)
+        const shouldRotate = this.playerColor === 'red';
+        const displayRow = shouldRotate ? (7 - serverRow) : serverRow;
+        const displayCol = shouldRotate ? (7 - serverCol) : serverCol;
+        
+        // Auto-select the capturing piece
+        this.selectPiece(displayRow, displayCol, serverRow, serverCol);
+        
+        // Show message to user with enhanced styling
+        this.showMessage('🎯 Piece auto-selected for continued capturing! Make your next capture move.', 'success');
+        
+        // Add special highlighting to indicate forced selection
+        const square = document.querySelector(`[data-display-row="${displayRow}"][data-display-col="${displayCol}"]`);
+        if (square) {
+            square.classList.add('forced-selection');
+            // Remove the special class after a few seconds
+            setTimeout(() => {
+                square.classList.remove('forced-selection');
+            }, 3000);
+        }
     }
 
     highlightPossibleMoves() {

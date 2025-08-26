@@ -159,6 +159,30 @@ body {
     min-width: auto;
 }
 
+/* New Game Button States */
+.btn.requested {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+    color: white;
+    animation: pulse 2s infinite;
+}
+
+.btn.pending {
+    background: linear-gradient(135deg, #27ae60, #229954);
+    color: white;
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+@keyframes glow {
+    from { box-shadow: 0 0 5px rgba(39, 174, 96, 0.5); }
+    to { box-shadow: 0 0 20px rgba(39, 174, 96, 0.8); }
+}
+
 /* Game Container */
 .game-container {
     padding: 30px;

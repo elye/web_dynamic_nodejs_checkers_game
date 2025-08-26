@@ -49,6 +49,7 @@ class CheckersGame {
         this.selectedPiece = null;
         this.mustCapture = false;
         this.capturingPiece = null;
+        this.newGameRequests = new Set(); // Track players who want a new game
     }
 
     initializeBoard() {
@@ -92,6 +93,9 @@ class CheckersGame {
 
     removePlayer(playerId) {
         delete this.players[playerId];
+        if (this.newGameRequests) {
+            this.newGameRequests.delete(playerId);
+        }
         if (Object.keys(this.players).length === 0) {
             this.gameState = 'finished';
         }
@@ -392,6 +396,36 @@ class CheckersGame {
         this.selectedPiece = null;
         this.mustCapture = false;
         this.capturingPiece = null;
+        this.newGameRequests = new Set(); // Clear any pending requests
+    }
+
+    requestNewGame(playerId) {
+        if (!this.newGameRequests) {
+            this.newGameRequests = new Set();
+        }
+        
+        this.newGameRequests.add(playerId);
+        
+        // Check if both players have requested a new game
+        const playerCount = Object.keys(this.players).length;
+        if (playerCount === 2 && this.newGameRequests.size === 2) {
+            // Both players agreed, reset the game
+            this.resetGame();
+            return { approved: true, bothAgreed: true };
+        } else if (playerCount === 1) {
+            // Only one player in room, allow immediate reset
+            this.resetGame();
+            return { approved: true, bothAgreed: false, reason: 'single_player' };
+        } else {
+            // Waiting for other player's agreement
+            return { approved: false, waitingForOther: true };
+        }
+    }
+
+    cancelNewGameRequest(playerId) {
+        if (this.newGameRequests) {
+            this.newGameRequests.delete(playerId);
+        }
     }
 
     getGameState() {
@@ -403,7 +437,8 @@ class CheckersGame {
             winner: this.winner,
             board: this.board,
             mustCapture: this.mustCapture,
-            capturingPiece: this.capturingPiece
+            capturingPiece: this.capturingPiece,
+            newGameRequests: this.newGameRequests ? Array.from(this.newGameRequests) : []
         };
     }
 }
@@ -519,16 +554,94 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Reset game
-    socket.on('reset-game', () => {
+    // Reset game (now requires agreement from both players)
+    socket.on('request-new-game', () => {
         if (!socket.roomCode) return;
 
         const game = games.get(socket.roomCode);
         if (!game) return;
 
-        game.resetGame();
-        io.to(socket.roomCode).emit('game-reset', game.getGameState());
-        console.log(`Game reset in room ${socket.roomCode}`);
+        const result = game.requestNewGame(socket.id);
+        
+        if (result.approved) {
+            if (result.bothAgreed) {
+                // Both players agreed, reset the game
+                io.to(socket.roomCode).emit('game-reset', {
+                    gameState: game.getGameState(),
+                    message: 'Both players agreed to start a new game!'
+                });
+                console.log(`New game started in room ${socket.roomCode} - both players agreed`);
+            } else if (result.reason === 'single_player') {
+                // Only one player in room, allow immediate reset
+                io.to(socket.roomCode).emit('game-reset', {
+                    gameState: game.getGameState(),
+                    message: 'New game started!'
+                });
+                console.log(`New game started in room ${socket.roomCode} - single player`);
+            }
+        } else if (result.waitingForOther) {
+            // Notify all players about the pending request
+            const requesterName = game.players[socket.id]?.name || 'Player';
+            io.to(socket.roomCode).emit('new-game-requested', {
+                requesterName,
+                gameState: game.getGameState()
+            });
+            console.log(`New game requested by ${requesterName} in room ${socket.roomCode}`);
+        }
+    });
+
+    // Cancel new game request
+    socket.on('cancel-new-game-request', () => {
+        if (!socket.roomCode) return;
+
+        const game = games.get(socket.roomCode);
+        if (!game) return;
+
+        game.cancelNewGameRequest(socket.id);
+        
+        const requesterName = game.players[socket.id]?.name || 'Player';
+        io.to(socket.roomCode).emit('new-game-request-cancelled', {
+            requesterName,
+            gameState: game.getGameState()
+        });
+        console.log(`New game request cancelled by ${requesterName} in room ${socket.roomCode}`);
+    });
+
+    // Legacy reset game handler (kept for backward compatibility but now just calls request-new-game)
+    socket.on('reset-game', () => {
+        // Trigger the same logic as request-new-game
+        if (!socket.roomCode) return;
+
+        const game = games.get(socket.roomCode);
+        if (!game) return;
+
+        const result = game.requestNewGame(socket.id);
+        
+        if (result.approved) {
+            if (result.bothAgreed) {
+                // Both players agreed, reset the game
+                io.to(socket.roomCode).emit('game-reset', {
+                    gameState: game.getGameState(),
+                    message: 'Both players agreed to start a new game!'
+                });
+                console.log(`New game started in room ${socket.roomCode} - both players agreed`);
+            } else if (result.reason === 'single_player') {
+                // Only one player in room, allow immediate reset
+                io.to(socket.roomCode).emit('game-reset', {
+                    gameState: game.getGameState(),
+                    message: 'New game started!'
+                });
+                console.log(`New game started in room ${socket.roomCode} - single player`);
+            }
+        } else if (result.waitingForOther) {
+            // Notify all players about the pending request
+            const requesterName = game.players[socket.id]?.name || 'Player';
+            io.to(socket.roomCode).emit('new-game-requested', {
+                requesterName,
+                gameState: game.getGameState()
+            });
+            console.log(`New game requested by ${requesterName} in room ${socket.roomCode}`);
+        }
     });
 
     // Handle disconnect

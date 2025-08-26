@@ -13,6 +13,7 @@ class CheckersClient {
         this.playerName = '';
         this.roomCode = '';
         this.isMyTurn = false;
+        this.hasRequestedNewGame = false; // Track if current player has requested new game
         
         this.initializeElements();
         this.attachEventListeners();
@@ -119,6 +120,8 @@ class CheckersClient {
         this.socket.on('move-error', (data) => this.handleMoveError(data));
         this.socket.on('game-over', (data) => this.handleGameOver(data));
         this.socket.on('game-reset', (data) => this.handleGameReset(data));
+        this.socket.on('new-game-requested', (data) => this.handleNewGameRequested(data));
+        this.socket.on('new-game-request-cancelled', (data) => this.handleNewGameRequestCancelled(data));
         this.socket.on('possible-moves', (data) => this.handlePossibleMoves(data));
         this.socket.on('error', (data) => this.handleError(data));
 
@@ -186,14 +189,45 @@ class CheckersClient {
     }
 
     resetGame() {
-        if (confirm('Are you sure you want to start a new game?')) {
-            this.socket.emit('reset-game');
+        const playerCount = Object.keys(this.gameState?.players || {}).length;
+        
+        if (playerCount < 2) {
+            // Single player or no other player, allow immediate reset
+            if (confirm('Are you sure you want to start a new game?')) {
+                this.socket.emit('request-new-game');
+            }
+            return;
+        }
+
+        // Two players - need agreement
+        if (this.hasRequestedNewGame) {
+            // User wants to cancel their request
+            if (confirm('Cancel your new game request?')) {
+                this.socket.emit('cancel-new-game-request');
+            }
+        } else {
+            // User wants to request new game
+            if (confirm('Request a new game? The other player must also agree.')) {
+                this.socket.emit('request-new-game');
+            }
         }
     }
 
     playAgain() {
         this.closeModal();
-        this.resetGame();
+        
+        // Use the same logic as resetGame for consistency
+        const playerCount = Object.keys(this.gameState?.players || {}).length;
+        
+        if (playerCount < 2) {
+            // Single player - immediate reset
+            this.socket.emit('request-new-game');
+        } else {
+            // Two players - show confirmation and request
+            if (confirm('Request a new game? The other player must also agree.')) {
+                this.socket.emit('request-new-game');
+            }
+        }
     }
 
     closeModal() {
@@ -229,6 +263,7 @@ class CheckersClient {
         this.possibleMoves = [];
         this.playerColor = null;
         this.roomCode = '';
+        this.hasRequestedNewGame = false;
         this.currentRoomCode.textContent = '-';
         this.clearBoard();
         this.clearMessages();
@@ -406,10 +441,38 @@ class CheckersClient {
 
     handleGameReset(data) {
         console.log('Game reset:', data);
-        this.updateGameState(data);
+        this.updateGameState(data.gameState);
         this.clearSelection();
         this.closeModal();
-        this.showMessage('New game started!', 'info');
+        this.hasRequestedNewGame = false;
+        this.updateNewGameButton();
+        this.showMessage(data.message || 'New game started!', 'success');
+    }
+
+    handleNewGameRequested(data) {
+        console.log('New game requested:', data);
+        this.updateGameState(data.gameState);
+        
+        // Update our tracking of who has requested
+        this.updateNewGameRequestStatus();
+        this.updateNewGameButton();
+        
+        if (this.hasRequestedNewGame) {
+            this.showMessage(`Waiting for other player to agree to new game...`, 'info');
+        } else {
+            this.showMessage(`${data.requesterName} wants to start a new game. Click "New Game" to agree!`, 'info');
+        }
+    }
+
+    handleNewGameRequestCancelled(data) {
+        console.log('New game request cancelled:', data);
+        this.updateGameState(data.gameState);
+        
+        // Update our tracking
+        this.updateNewGameRequestStatus();
+        this.updateNewGameButton();
+        
+        this.showMessage(`${data.requesterName} cancelled their new game request.`, 'info');
     }
 
     handlePossibleMoves(data) {
@@ -494,6 +557,48 @@ class CheckersClient {
         
         // Update piece visuals when turn changes
         this.updatePieceVisuals();
+        
+        // Update new game request status
+        this.updateNewGameRequestStatus();
+        this.updateNewGameButton();
+    }
+
+    updateNewGameRequestStatus() {
+        if (this.gameState && this.gameState.newGameRequests) {
+            this.hasRequestedNewGame = this.gameState.newGameRequests.includes(this.socket.id);
+        } else {
+            this.hasRequestedNewGame = false;
+        }
+    }
+
+    updateNewGameButton() {
+        const playerCount = Object.keys(this.gameState?.players || {}).length;
+        
+        if (playerCount < 2) {
+            // Single player or no other player - simple new game
+            this.resetGameBtn.textContent = 'New Game';
+            this.resetGameBtn.classList.remove('requested', 'pending');
+            return;
+        }
+
+        // Two players - show request status
+        if (this.hasRequestedNewGame) {
+            this.resetGameBtn.textContent = 'Cancel Request';
+            this.resetGameBtn.classList.add('requested');
+            this.resetGameBtn.classList.remove('pending');
+        } else {
+            const otherPlayerRequested = this.gameState?.newGameRequests && 
+                                       this.gameState.newGameRequests.length > 0;
+            
+            if (otherPlayerRequested) {
+                this.resetGameBtn.textContent = 'Agree to New Game';
+                this.resetGameBtn.classList.add('pending');
+                this.resetGameBtn.classList.remove('requested');
+            } else {
+                this.resetGameBtn.textContent = 'Request New Game';
+                this.resetGameBtn.classList.remove('requested', 'pending');
+            }
+        }
     }
 
     updatePieceVisuals() {

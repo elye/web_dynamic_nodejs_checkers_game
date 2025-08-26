@@ -341,13 +341,6 @@ class CheckersClient {
                 this.autoSelectCapturingPiece();
             }, 100);
         }
-        
-        // Show board orientation message for testing
-        if (this.playerColor === 'red') {
-            this.showMessage('🔴 Board rotated: Your red pieces are at the bottom!', 'info');
-        } else if (this.playerColor === 'black') {
-            this.showMessage('⚫ Standard view: Your black pieces are at the bottom!', 'info');
-        }
     }
 
     updateTurnDisplay() {

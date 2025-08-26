@@ -549,19 +549,6 @@ class CheckersClient {
                 }
             }
         });
-        
-        // Show helpful message when mandatory captures are detected
-        if (this.isMyTurn && hasMandatory && captureableCount > 0) {
-            if (this.gameState.mustCapture && this.gameState.capturingPiece) {
-                // Continue capturing message is already shown in autoSelectCapturingPiece
-            } else {
-                // New mandatory capture situation
-                const message = captureableCount === 1 ? 
-                    '⚡ Mandatory capture! Click on the glowing piece to capture.' : 
-                    `⚡ Mandatory captures available! ${captureableCount} pieces can capture.`;
-                this.showMessage(message, 'info');
-            }
-        }
     }
 
     // Board management
@@ -884,10 +871,7 @@ class CheckersClient {
         
         // Auto-select the capturing piece
         this.selectPiece(displayRow, displayCol, serverRow, serverCol);
-        
-        // Show message to user with enhanced styling
-        this.showMessage('🎯 Piece auto-selected for continued capturing! Make your next capture move.', 'success');
-        
+                
         // Add special highlighting to indicate forced selection
         const square = document.querySelector(`[data-display-row="${displayRow}"][data-display-col="${displayCol}"]`);
         if (square) {

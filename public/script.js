@@ -42,6 +42,7 @@ class CheckersClient {
         
         // Status and messages
         this.gameMessages = document.getElementById('game-messages');
+        this.toastContainer = document.getElementById('toast-container');
         this.connectionStatus = document.getElementById('connection-status');
         this.statusIndicator = document.getElementById('status-indicator');
         this.statusText = document.getElementById('status-text');
@@ -630,21 +631,34 @@ class CheckersClient {
 
     // UI helper methods
     showMessage(message, type = 'info') {
-        const messageElement = document.createElement('div');
-        messageElement.className = `message ${type}`;
-        messageElement.textContent = message;
+        // Create toast element
+        const toastElement = document.createElement('div');
+        toastElement.className = `toast toast-${type}`;
+        toastElement.textContent = message;
         
-        this.gameMessages.appendChild(messageElement);
+        // Add to toast container
+        this.toastContainer.appendChild(toastElement);
         
-        // Auto-remove message after 5 seconds
+        // Trigger animation by adding show class after a brief delay
         setTimeout(() => {
-            if (messageElement.parentNode) {
-                messageElement.parentNode.removeChild(messageElement);
-            }
-        }, 5000);
+            toastElement.classList.add('toast-show');
+        }, 10);
         
-        // Scroll to bottom
-        this.gameMessages.scrollTop = this.gameMessages.scrollHeight;
+        // Auto-remove toast after duration based on message length
+        const duration = Math.max(3000, message.length * 50); // Min 3 seconds, +50ms per character
+        const maxDuration = 8000; // Max 8 seconds
+        const finalDuration = Math.min(duration, maxDuration);
+        
+        setTimeout(() => {
+            toastElement.classList.add('toast-hide');
+            
+            // Remove from DOM after hide animation
+            setTimeout(() => {
+                if (toastElement.parentNode) {
+                    toastElement.parentNode.removeChild(toastElement);
+                }
+            }, 300);
+        }, finalDuration);
     }
 
     clearMessages() {

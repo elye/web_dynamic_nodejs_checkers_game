@@ -26,6 +26,9 @@ A real-time multiplayer checkers game built with Node.js, Socket.io, and vanilla
 - Real-time opponent move updates
 - Game status indicators and turn management
 - Visual highlighting of possible moves
+- **🎉 Confetti celebration for winners**
+- **💪 Motivational consolation messages for losers**
+- Enhanced game over experience with personalized feedback
 
 ### 🔧 Technical Features
 - Express.js REST API for room management
@@ -96,6 +99,12 @@ A real-time multiplayer checkers game built with Node.js, Socket.io, and vanilla
 - **Drag and drop** pieces to move them
 - Green dots show valid move destinations
 - Gold highlight shows your selected piece
+
+### Game End Experience
+- **🏆 Winners** get a spectacular confetti celebration with animated title and victory messages
+- **💪 Losers** receive motivational consolation messages encouraging them to never give up
+- Dynamic modal styling that changes based on the game outcome
+- Random inspirational quotes to keep players motivated for the next game
 
 ## Project Structure
 

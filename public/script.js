@@ -49,10 +49,15 @@ class CheckersClient {
         
         // Modal elements
         this.gameOverModal = document.getElementById('game-over-modal');
+        this.modalContent = document.getElementById('modal-content');
         this.gameOverTitle = document.getElementById('game-over-title');
         this.gameOverMessage = document.getElementById('game-over-message');
+        this.consolationMessage = document.getElementById('consolation-message');
         this.playAgainBtn = document.getElementById('play-again');
         this.closeModalBtn = document.getElementById('close-modal');
+        
+        // Confetti container
+        this.confettiContainer = document.getElementById('confetti-container');
     }
 
     attachEventListeners() {
@@ -193,6 +198,9 @@ class CheckersClient {
 
     closeModal() {
         this.gameOverModal.classList.add('hidden');
+        // Also hide confetti when closing modal
+        this.confettiContainer.classList.add('hidden');
+        this.confettiContainer.innerHTML = '';
     }
 
     copyRoomCode() {
@@ -224,6 +232,9 @@ class CheckersClient {
         this.currentRoomCode.textContent = '-';
         this.clearBoard();
         this.clearMessages();
+        // Clear confetti when clearing game state
+        this.confettiContainer.classList.add('hidden');
+        this.confettiContainer.innerHTML = '';
     }
 
     // Socket event handlers
@@ -277,11 +288,120 @@ class CheckersClient {
         const winner = data.winner;
         const isWinner = this.playerColor === winner;
         
-        this.gameOverTitle.textContent = isWinner ? 'You Win!' : 'You Lose';
-        this.gameOverMessage.textContent = `${winner.charAt(0).toUpperCase() + winner.slice(1)} player wins!`;
-        this.gameOverModal.classList.remove('hidden');
+        // Reset modal classes
+        this.modalContent.className = 'modal-content';
+        this.gameOverTitle.className = '';
+        this.consolationMessage.classList.add('hidden');
         
-        this.showMessage(`Game Over! ${winner} player wins!`, 'success');
+        if (isWinner) {
+            // Winner styling and confetti
+            this.modalContent.classList.add('winner');
+            this.gameOverTitle.className = 'winner-title';
+            this.gameOverTitle.textContent = '🎉 Congratulations! You Win! 🎉';
+            this.gameOverMessage.textContent = `Amazing victory! ${winner.charAt(0).toUpperCase() + winner.slice(1)} player conquers the board!`;
+            
+            // Trigger confetti animation
+            this.createConfetti();
+            
+            // Show winner message
+            this.showMessage('🏆 Victory! You are the Checkers Champion! 🏆', 'success');
+        } else {
+            // Loser styling and consolation
+            this.modalContent.classList.add('loser');
+            this.gameOverTitle.className = 'loser-title';
+            this.gameOverTitle.textContent = 'Game Over - Keep Fighting!';
+            this.gameOverMessage.textContent = `${winner.charAt(0).toUpperCase() + winner.slice(1)} player wins this round.`;
+            
+            // Show consolation message
+            const consolationMessages = [
+                "Never give up! Every master was once a beginner. 💪",
+                "Champions are made in defeat. Come back stronger! 🚀",
+                "This is just practice for your future victory! ⭐",
+                "Every loss is a lesson in disguise. You've got this! 🎯",
+                "The best players lose games but win hearts. Keep playing! ❤️",
+                "Failure is the stepping stone to success. Try again! 🌟",
+                "Great players aren't made in comfort zones. Keep pushing! 🔥",
+                "Today's defeat is tomorrow's comeback story! 📈",
+                "Every grandmaster has lost thousands of games. Your turn to learn! 🧠",
+                "The only real failure is giving up. Keep fighting! ⚔️",
+                "Resilience is your superpower. Use it wisely! ⚡",
+                "This game ends, but your journey has just begun! 🌟"
+            ];
+            
+            const randomMessage = consolationMessages[Math.floor(Math.random() * consolationMessages.length)];
+            this.consolationMessage.textContent = randomMessage;
+            this.consolationMessage.classList.remove('hidden');
+            
+            // Show encouraging message
+            this.showMessage('💪 Don\'t give up! Every game makes you stronger!', 'info');
+        }
+        
+        this.gameOverModal.classList.remove('hidden');
+        this.showMessage(`Game Over! ${winner} player wins!`, isWinner ? 'success' : 'info');
+    }
+
+    createConfetti() {
+        // Clear any existing confetti
+        this.confettiContainer.innerHTML = '';
+        this.confettiContainer.classList.remove('hidden');
+        
+        // Create multiple waves of confetti
+        for (let wave = 0; wave < 3; wave++) {
+            setTimeout(() => {
+                this.createConfettiWave();
+            }, wave * 500);
+        }
+        
+        // Hide confetti container after animation completes
+        setTimeout(() => {
+            this.confettiContainer.classList.add('hidden');
+            this.confettiContainer.innerHTML = '';
+        }, 4000);
+    }
+
+    createConfettiWave() {
+        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#eb4d4b', '#6c5ce7', '#a29bfe'];
+        const confettiCount = 50;
+        
+        for (let i = 0; i < confettiCount; i++) {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti-piece';
+            
+            // Random positioning and timing
+            const startX = Math.random() * window.innerWidth;
+            const animationDuration = 3 + Math.random() * 2; // 3-5 seconds
+            const delay = Math.random() * 1000; // 0-1 second delay
+            
+            confetti.style.left = startX + 'px';
+            confetti.style.animationDuration = animationDuration + 's';
+            confetti.style.animationDelay = delay + 'ms';
+            confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            // Random size and shape variation
+            const size = 8 + Math.random() * 6; // 8-14px
+            confetti.style.width = size + 'px';
+            confetti.style.height = size + 'px';
+            
+            // Add random rotation for more dynamic effect
+            const rotation = Math.random() * 360;
+            confetti.style.transform = `rotate(${rotation}deg)`;
+            
+            // Add random border-radius for shape variety
+            if (Math.random() > 0.5) {
+                confetti.style.borderRadius = '50%';
+            } else {
+                confetti.style.borderRadius = `${Math.random() * 50}%`;
+            }
+            
+            this.confettiContainer.appendChild(confetti);
+            
+            // Remove confetti piece after animation
+            setTimeout(() => {
+                if (confetti.parentNode) {
+                    confetti.parentNode.removeChild(confetti);
+                }
+            }, (animationDuration + 1) * 1000 + delay);
+        }
     }
 
     handleGameReset(data) {

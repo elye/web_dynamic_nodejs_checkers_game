@@ -91,15 +91,19 @@
 
     <!-- Game Over Modal -->
     <div id="game-over-modal" class="modal hidden">
-        <div class="modal-content">
+        <div class="modal-content" id="modal-content">
             <h2 id="game-over-title">Game Over</h2>
             <p id="game-over-message">Player wins!</p>
+            <div id="consolation-message" class="consolation-message hidden"></div>
             <div class="modal-actions">
                 <button id="play-again" class="btn btn-primary">Play Again</button>
                 <button id="close-modal" class="btn btn-secondary">Close</button>
             </div>
         </div>
     </div>
+
+    <!-- Confetti Container -->
+    <div id="confetti-container" class="confetti-container hidden"></div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>

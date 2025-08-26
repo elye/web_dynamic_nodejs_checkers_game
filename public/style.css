@@ -706,11 +706,179 @@ body {
     }
 }
 
+/* Confetti Animation */
+.confetti-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    overflow: hidden;
+}
+
+.confetti-piece {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    opacity: 0.8;
+    animation: confetti-fall linear forwards;
+}
+
+.confetti-piece:nth-child(odd) {
+    background: #ff6b6b;
+    transform: rotate(45deg);
+}
+
+.confetti-piece:nth-child(even) {
+    background: #4ecdc4;
+    border-radius: 50%;
+}
+
+.confetti-piece:nth-child(3n) {
+    background: #45b7d1;
+    transform: rotate(90deg);
+}
+
+.confetti-piece:nth-child(4n) {
+    background: #f9ca24;
+    border-radius: 50%;
+}
+
+.confetti-piece:nth-child(5n) {
+    background: #f0932b;
+    transform: rotate(135deg);
+}
+
+.confetti-piece:nth-child(6n) {
+    background: #eb4d4b;
+    border-radius: 50%;
+}
+
+.confetti-piece:nth-child(7n) {
+    background: #6c5ce7;
+    transform: rotate(180deg);
+}
+
+.confetti-piece:nth-child(8n) {
+    background: #a29bfe;
+    border-radius: 50%;
+}
+
+@keyframes confetti-fall {
+    0% {
+        transform: translateY(-100vh) rotate(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(100vh) rotate(720deg);
+        opacity: 0;
+    }
+}
+
+/* Enhanced modal styles for winner/loser */
+.modal-content.winner {
+    background: linear-gradient(135deg, #fff, #f8f9fa);
+    border: 3px solid #28a745;
+    position: relative;
+    overflow: hidden;
+}
+
+.modal-content.winner::before {
+    content: '🏆';
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    font-size: 3rem;
+    opacity: 0.3;
+    animation: winner-pulse 2s ease-in-out infinite;
+}
+
+.modal-content.loser {
+    background: linear-gradient(135deg, #fff, #f8f9fa);
+    border: 3px solid #6c757d;
+    position: relative;
+}
+
+.modal-content.loser::before {
+    content: '💪';
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    font-size: 2.5rem;
+    opacity: 0.3;
+    animation: motivate-pulse 2s ease-in-out infinite;
+}
+
+.winner-title {
+    color: #28a745 !important;
+    text-shadow: 2px 2px 4px rgba(40, 167, 69, 0.3);
+    animation: winner-glow 2s ease-in-out infinite, winner-bounce 0.6s ease-in-out 3;
+}
+
+@keyframes winner-bounce {
+    0%, 100% { 
+        transform: translateY(0) scale(1);
+    }
+    50% { 
+        transform: translateY(-10px) scale(1.1);
+    }
+}
+
+.loser-title {
+    color: #6c757d !important;
+    text-shadow: 1px 1px 2px rgba(108, 117, 125, 0.3);
+}
+
+.consolation-message {
+    color: #495057;
+    font-style: italic;
+    font-weight: 600;
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(108, 117, 125, 0.1);
+    border-radius: 8px;
+    border-left: 4px solid #6c757d;
+}
+
+@keyframes winner-pulse {
+    0%, 100% { 
+        transform: scale(1) rotate(0deg);
+        opacity: 0.3;
+    }
+    50% { 
+        transform: scale(1.2) rotate(10deg);
+        opacity: 0.5;
+    }
+}
+
+@keyframes motivate-pulse {
+    0%, 100% { 
+        transform: scale(1);
+        opacity: 0.3;
+    }
+    50% { 
+        transform: scale(1.1);
+        opacity: 0.5;
+    }
+}
+
+@keyframes winner-glow {
+    0%, 100% { 
+        text-shadow: 2px 2px 4px rgba(40, 167, 69, 0.3);
+    }
+    50% { 
+        text-shadow: 2px 2px 8px rgba(40, 167, 69, 0.6), 0 0 10px rgba(40, 167, 69, 0.4);
+    }
+}
+
 /* Print styles */
 @media print {
     .connection-status,
     .game-controls,
-    .modal {
+    .modal,
+    .confetti-container {
         display: none !important;
     }
 }

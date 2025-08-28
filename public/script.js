@@ -1,3 +1,8 @@
+// Warn user before leaving or refreshing the page to prevent accidental loss of game state
+window.addEventListener('beforeunload', function (e) {
+    e.preventDefault();
+    e.returnValue = 'Are you sure you want to leave? Your game progress will be lost.';
+});
 /**
  * Online Checkers Game Client
  * Handles UI interactions, WebSocket communication, and game state management

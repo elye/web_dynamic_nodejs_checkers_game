@@ -635,6 +635,7 @@ body {
     cursor: pointer;
     text-align: left;
     min-height: 80px;
+    color: #2c3e50; /* Dark text color for better contrast */
 }
 
 .turn-option:hover {
@@ -658,6 +659,7 @@ body {
 .turn-option-icon {
     font-size: 2rem;
     flex-shrink: 0;
+    color: #34495e; /* Darker color for icons */
 }
 
 .turn-option-text {
@@ -665,17 +667,50 @@ body {
     font-weight: bold;
     display: block;
     margin-bottom: 5px;
+    color: #2c3e50; /* Explicit dark color for text */
 }
 
 .turn-option-desc {
     font-size: 0.95rem;
-    opacity: 0.8;
+    opacity: 0.9; /* Increased from 0.8 for better readability */
     display: block;
+    color: #34495e; /* Explicit dark color for description */
 }
 
 .turn-option:hover .turn-option-text,
 .turn-option:hover .turn-option-desc {
     color: inherit;
+}
+
+/* Focus and active states for better accessibility */
+.turn-option:focus {
+    outline: 3px solid #3498db;
+    outline-offset: 2px;
+}
+
+.turn-option:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Disabled state styling */
+.turn-option:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.turn-option:disabled:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: transparent;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.turn-option:disabled .turn-option-text,
+.turn-option:disabled .turn-option-desc,
+.turn-option:disabled .turn-option-icon {
+    color: #7f8c8d; /* Muted color for disabled state */
 }
 
 /* Mobile responsiveness for turn order modal */
@@ -693,18 +728,22 @@ body {
         min-height: 70px;
         padding: 15px;
         gap: 12px;
+        color: #2c3e50; /* Ensure dark text on mobile */
     }
 
     .turn-option-icon {
         font-size: 1.8rem;
+        color: #34495e; /* Ensure icon color on mobile */
     }
 
     .turn-option-text {
         font-size: 1.1rem;
+        color: #2c3e50; /* Ensure text color on mobile */
     }
 
     .turn-option-desc {
         font-size: 0.9rem;
+        color: #34495e; /* Ensure description color on mobile */
     }
 }
 

@@ -213,15 +213,10 @@ class CheckersClient {
 
         // Two players - need agreement
         if (this.hasRequestedNewGame) {
-            // User wants to cancel their request
-            if (confirm('Cancel your new game request?')) {
-                this.socket.emit('cancel-new-game-request');
-            }
+            this.socket.emit('cancel-new-game-request');
         } else {
             // User wants to request new game
-            if (confirm('Request a new game? The other player must also agree.')) {
-                this.socket.emit('request-new-game');
-            }
+            this.socket.emit('request-new-game');
         }
     }
 
@@ -236,9 +231,7 @@ class CheckersClient {
             this.socket.emit('request-new-game');
         } else {
             // Two players - show confirmation and request
-            if (confirm('Request a new game? The other player must also agree.')) {
-                this.socket.emit('request-new-game');
-            }
+            this.socket.emit('request-new-game');
         }
     }
 

@@ -42,14 +42,16 @@ class CheckersGame {
     constructor(roomCode) {
         this.roomCode = roomCode;
         this.players = {};
-        this.currentPlayer = 'red';
-        this.gameState = 'waiting'; // waiting, playing, finished
+        this.currentPlayer = 'red'; // Default, can be changed by turn order selection
+        this.gameState = 'waiting'; // waiting, playing, finished, turn_selection
         this.winner = null;
         this.board = this.initializeBoard();
         this.selectedPiece = null;
         this.mustCapture = false;
         this.capturingPiece = null;
         this.newGameRequests = new Set(); // Track players who want a new game
+        this.turnOrderSelector = null; // Player who gets to choose turn order
+        this.waitingForTurnOrderSelection = false;
     }
 
     initializeBoard() {
@@ -85,7 +87,13 @@ class CheckersGame {
         this.players[playerId] = { name: playerName, color: color };
         
         if (Object.keys(this.players).length === 2) {
-            this.gameState = 'playing';
+            // Both players joined - prepare for turn order selection
+            this.gameState = 'turn_selection';
+            this.waitingForTurnOrderSelection = true;
+            
+            // The first player (red) gets to choose turn order
+            const redPlayer = Object.entries(this.players).find(([id, player]) => player.color === 'red');
+            this.turnOrderSelector = redPlayer[0];
         }
         
         return true;
@@ -388,15 +396,60 @@ class CheckersGame {
         return moves;
     }
 
+    selectTurnOrder(playerId, choice) {
+        // Only the designated selector can choose turn order
+        if (playerId !== this.turnOrderSelector || !this.waitingForTurnOrderSelection) {
+            return { success: false, reason: 'Not authorized to select turn order' };
+        }
+
+        const selectorPlayer = this.players[playerId];
+        
+        if (choice === 'self') {
+            // Selector starts first - keep their color as current player
+            this.currentPlayer = selectorPlayer.color;
+        } else if (choice === 'opponent') {
+            // Opponent starts first - set opponent's color as current player
+            this.currentPlayer = selectorPlayer.color === 'red' ? 'black' : 'red';
+        } else {
+            return { success: false, reason: 'Invalid choice' };
+        }
+
+        // Game is now ready to start
+        this.gameState = 'playing';
+        this.waitingForTurnOrderSelection = false;
+        this.turnOrderSelector = null;
+
+        return { 
+            success: true, 
+            currentPlayer: this.currentPlayer,
+            startingPlayerName: this.players[Object.keys(this.players).find(id => this.players[id].color === this.currentPlayer)]?.name
+        };
+    }
+
     resetGame() {
-        this.currentPlayer = 'red';
-        this.gameState = Object.keys(this.players).length === 2 ? 'playing' : 'waiting';
+        this.currentPlayer = 'red'; // Default, will be changed by turn order selection
         this.winner = null;
         this.board = this.initializeBoard();
         this.selectedPiece = null;
         this.mustCapture = false;
         this.capturingPiece = null;
         this.newGameRequests = new Set(); // Clear any pending requests
+        
+        const playerCount = Object.keys(this.players).length;
+        if (playerCount === 2) {
+            // Both players present - require turn order selection
+            this.gameState = 'turn_selection';
+            this.waitingForTurnOrderSelection = true;
+            
+            // The red player gets to choose turn order (or we can randomize this)
+            const redPlayer = Object.entries(this.players).find(([id, player]) => player.color === 'red');
+            this.turnOrderSelector = redPlayer ? redPlayer[0] : Object.keys(this.players)[0];
+        } else {
+            // Single player or no players
+            this.gameState = playerCount === 1 ? 'waiting' : 'waiting';
+            this.waitingForTurnOrderSelection = false;
+            this.turnOrderSelector = null;
+        }
     }
 
     requestNewGame(playerId) {
@@ -438,7 +491,9 @@ class CheckersGame {
             board: this.board,
             mustCapture: this.mustCapture,
             capturingPiece: this.capturingPiece,
-            newGameRequests: this.newGameRequests ? Array.from(this.newGameRequests) : []
+            newGameRequests: this.newGameRequests ? Array.from(this.newGameRequests) : [],
+            waitingForTurnOrderSelection: this.waitingForTurnOrderSelection,
+            turnOrderSelector: this.turnOrderSelector
         };
     }
 }
@@ -518,6 +573,34 @@ io.on('connection', (socket) => {
         // Send initial game state to the joining player
         socket.emit('game-state', game.getGameState());
         
+        // Check if we need to show turn order selection
+        if (game.waitingForTurnOrderSelection) {
+            console.log(`Turn order selection needed. Selector: ${game.turnOrderSelector}, Current socket: ${socket.id}`);
+            
+            // Show the dialog to both players, but indicate who can choose
+            const canChoose = game.turnOrderSelector === socket.id;
+            socket.emit('show-turn-order-selection', { canChoose });
+            
+            if (canChoose) {
+                console.log(`Showing turn order selection to selector: ${socket.id}`);
+            } else {
+                console.log(`Showing turn order selection (view-only) to non-selector: ${socket.id}`);
+            }
+            
+            // Also notify the selector if they're different from the joining player
+            if (game.turnOrderSelector && game.turnOrderSelector !== socket.id) {
+                const selectorSocket = io.sockets.sockets.get(game.turnOrderSelector);
+                if (selectorSocket) {
+                    console.log(`Notifying existing selector: ${game.turnOrderSelector}`);
+                    selectorSocket.emit('show-turn-order-selection', { canChoose: true });
+                } else {
+                    console.log(`Selector socket not found: ${game.turnOrderSelector}`);
+                }
+            }
+        } else {
+            console.log(`No turn order selection needed. Game state: ${game.gameState}`);
+        }
+        
         console.log(`Player ${playerName} joined room ${roomCode}`);
     });
 
@@ -554,6 +637,30 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Handle turn order selection
+    socket.on('select-turn-order', ({ choice }) => {
+        if (!socket.roomCode) return;
+
+        const game = games.get(socket.roomCode);
+        if (!game) return;
+
+        const result = game.selectTurnOrder(socket.id, choice);
+        
+        if (result.success) {
+            // Broadcast game state update to all players
+            io.to(socket.roomCode).emit('turn-order-selected', {
+                choice,
+                currentPlayer: result.currentPlayer,
+                startingPlayerName: result.startingPlayerName,
+                gameState: game.getGameState()
+            });
+            
+            console.log(`Turn order selected in room ${socket.roomCode}: ${choice}, starting player: ${result.currentPlayer}`);
+        } else {
+            socket.emit('move-error', { message: result.reason });
+        }
+    });
+
     // Reset game (now requires agreement from both players)
     socket.on('request-new-game', () => {
         if (!socket.roomCode) return;
@@ -570,6 +677,15 @@ io.on('connection', (socket) => {
                     gameState: game.getGameState(),
                     message: 'Both players agreed to start a new game!'
                 });
+                
+                // Check if we need to show turn order selection
+                if (game.waitingForTurnOrderSelection && game.turnOrderSelector) {
+                    const selectorSocket = io.sockets.sockets.get(game.turnOrderSelector);
+                    if (selectorSocket) {
+                        selectorSocket.emit('show-turn-order-selection', { canChoose: true });
+                    }
+                }
+                
                 console.log(`New game started in room ${socket.roomCode} - both players agreed`);
             } else if (result.reason === 'single_player') {
                 // Only one player in room, allow immediate reset
@@ -624,6 +740,15 @@ io.on('connection', (socket) => {
                     gameState: game.getGameState(),
                     message: 'Both players agreed to start a new game!'
                 });
+                
+                // Check if we need to show turn order selection
+                if (game.waitingForTurnOrderSelection && game.turnOrderSelector) {
+                    const selectorSocket = io.sockets.sockets.get(game.turnOrderSelector);
+                    if (selectorSocket) {
+                        selectorSocket.emit('show-turn-order-selection', { canChoose: true });
+                    }
+                }
+                
                 console.log(`New game started in room ${socket.roomCode} - both players agreed`);
             } else if (result.reason === 'single_player') {
                 // Only one player in room, allow immediate reset

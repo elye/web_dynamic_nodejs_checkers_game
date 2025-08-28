@@ -57,6 +57,11 @@ class CheckersClient {
         this.playAgainBtn = document.getElementById('play-again');
         this.closeModalBtn = document.getElementById('close-modal');
         
+        // Turn Order Modal elements
+        this.turnOrderModal = document.getElementById('turn-order-modal');
+        this.playerStartsFirstBtn = document.getElementById('player-starts-first');
+        this.opponentStartsFirstBtn = document.getElementById('opponent-starts-first');
+        
         // Confetti container
         this.confettiContainer = document.getElementById('confetti-container');
     }
@@ -74,6 +79,10 @@ class CheckersClient {
         // Modal controls
         this.playAgainBtn.addEventListener('click', () => this.playAgain());
         this.closeModalBtn.addEventListener('click', () => this.closeModal());
+        
+        // Turn Order Modal controls
+        this.playerStartsFirstBtn.addEventListener('click', () => this.selectTurnOrder('self'));
+        this.opponentStartsFirstBtn.addEventListener('click', () => this.selectTurnOrder('opponent'));
         
         // Enter key support
         this.playerNameInput.addEventListener('keypress', (e) => {
@@ -122,6 +131,8 @@ class CheckersClient {
         this.socket.on('game-reset', (data) => this.handleGameReset(data));
         this.socket.on('new-game-requested', (data) => this.handleNewGameRequested(data));
         this.socket.on('new-game-request-cancelled', (data) => this.handleNewGameRequestCancelled(data));
+        this.socket.on('show-turn-order-selection', (data) => this.handleShowTurnOrderSelection(data));
+        this.socket.on('turn-order-selected', (data) => this.handleTurnOrderSelected(data));
         this.socket.on('possible-moves', (data) => this.handlePossibleMoves(data));
         this.socket.on('error', (data) => this.handleError(data));
 
@@ -235,6 +246,20 @@ class CheckersClient {
         // Also hide confetti when closing modal
         this.confettiContainer.classList.add('hidden');
         this.confettiContainer.innerHTML = '';
+    }
+
+    closeTurnOrderModal() {
+        this.turnOrderModal.classList.add('hidden');
+    }
+
+    selectTurnOrder(choice) {
+        // Send turn order choice to server (server will validate if player can choose)
+        console.log('Player selected turn order:', choice);
+        this.socket.emit('select-turn-order', { choice });
+        this.closeTurnOrderModal();
+        
+        const message = choice === 'self' ? 'You chose to start first!' : 'You let your opponent start first!';
+        this.showMessage(message, 'info');
     }
 
     copyRoomCode() {
@@ -475,6 +500,60 @@ class CheckersClient {
         this.showMessage(`${data.requesterName} cancelled their new game request.`, 'info');
     }
 
+    handleShowTurnOrderSelection(data) {
+        console.log('Show turn order selection:', data);
+        console.log('Turn order modal element:', this.turnOrderModal);
+        
+        if (this.turnOrderModal) {
+            // Show the turn order selection modal
+            this.turnOrderModal.classList.remove('hidden');
+            console.log('Turn order modal shown successfully');
+            console.log('Modal classes after show:', this.turnOrderModal.className);
+            
+            // Add a bright red border to make it very visible for debugging
+            this.turnOrderModal.style.border = '5px solid red';
+            this.turnOrderModal.style.zIndex = '9999';
+            
+            // Update the modal content based on whether this player can choose
+            const modalTitle = this.turnOrderModal.querySelector('h2');
+            const buttons = this.turnOrderModal.querySelectorAll('.turn-option');
+            
+            if (data.canChoose) {
+                modalTitle.textContent = '🎮 Choose Who Starts First';
+                buttons.forEach(btn => btn.disabled = false);
+                
+                // Show prominent message for the chooser
+                this.showMessage('🎮 YOU get to choose who starts first! Check the dialog box.', 'success');
+            } else {
+                modalTitle.textContent = '⏳ Waiting for Turn Order Selection';
+                buttons.forEach(btn => btn.disabled = true);
+                
+                // Show message for non-selector
+                this.showMessage('Your opponent is choosing who starts first...', 'info');
+            }
+        } else {
+            console.error('Turn order modal element not found!');
+        }
+    }
+
+    // Test method to manually show the modal (for debugging)
+    testShowModal() {
+        console.log('Test: Showing turn order modal');
+        if (this.turnOrderModal) {
+            this.turnOrderModal.classList.remove('hidden');
+            console.log('Test modal shown');
+        }
+    }
+
+    handleTurnOrderSelected(data) {
+        console.log('Turn order selected:', data);
+        this.updateGameState(data.gameState);
+        
+        // Show message about who is starting
+        const message = `${data.startingPlayerName} (${data.currentPlayer}) will start the game!`;
+        this.showMessage(message, 'success');
+    }
+
     handlePossibleMoves(data) {
         console.log('Possible moves:', data);
         
@@ -539,6 +618,13 @@ class CheckersClient {
         
         if (this.gameState.gameState === 'waiting') {
             this.turnDisplay.textContent = 'Waiting for players...';
+            turnIndicator.className = 'turn-indicator';
+        } else if (this.gameState.gameState === 'turn_selection') {
+            if (this.gameState.turnOrderSelector === this.socket.id) {
+                this.turnDisplay.textContent = 'Choose who starts first!';
+            } else {
+                this.turnDisplay.textContent = 'Waiting for turn order selection...';
+            }
             turnIndicator.className = 'turn-indicator';
         } else if (this.gameState.gameState === 'finished') {
             this.turnDisplay.textContent = 'Game finished';

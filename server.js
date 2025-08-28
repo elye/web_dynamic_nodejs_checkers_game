@@ -577,14 +577,14 @@ io.on('connection', (socket) => {
         if (game.waitingForTurnOrderSelection) {
             console.log(`Turn order selection needed. Selector: ${game.turnOrderSelector}, Current socket: ${socket.id}`);
             
-            // Show the dialog to both players, but indicate who can choose
-            const canChoose = game.turnOrderSelector === socket.id;
-            socket.emit('show-turn-order-selection', { canChoose });
-            
-            if (canChoose) {
+            // Only show the dialog to the player who can choose (game starter)
+            if (game.turnOrderSelector === socket.id) {
                 console.log(`Showing turn order selection to selector: ${socket.id}`);
+                socket.emit('show-turn-order-selection', { canChoose: true });
             } else {
-                console.log(`Showing turn order selection (view-only) to non-selector: ${socket.id}`);
+                console.log(`Not showing dialog to non-selector: ${socket.id}`);
+                // Just send updated game state to non-selector (will show waiting message in turn display)
+                socket.emit('game-state', game.getGameState());
             }
             
             // Also notify the selector if they're different from the joining player

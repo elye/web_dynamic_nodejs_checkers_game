@@ -14,6 +14,7 @@ class CheckersClient {
         this.roomCode = '';
         this.isMyTurn = false;
         this.hasRequestedNewGame = false; // Track if current player has requested new game
+        this.hasShownNonSelectorMessage = false; // Track if we've shown the non-selector message
         
         this.initializeElements();
         this.attachEventListeners();
@@ -289,6 +290,7 @@ class CheckersClient {
         this.playerColor = null;
         this.roomCode = '';
         this.hasRequestedNewGame = false;
+        this.hasShownNonSelectorMessage = false;
         this.currentRoomCode.textContent = '-';
         this.clearBoard();
         this.clearMessages();
@@ -505,7 +507,7 @@ class CheckersClient {
         console.log('Turn order modal element:', this.turnOrderModal);
         
         if (this.turnOrderModal) {
-            // Show the turn order selection modal
+            // Show the turn order selection modal (only called for players who can choose)
             this.turnOrderModal.classList.remove('hidden');
             console.log('Turn order modal shown successfully');
             console.log('Modal classes after show:', this.turnOrderModal.className);
@@ -514,23 +516,15 @@ class CheckersClient {
             this.turnOrderModal.style.border = '5px solid red';
             this.turnOrderModal.style.zIndex = '9999';
             
-            // Update the modal content based on whether this player can choose
+            // Update the modal content for the chooser
             const modalTitle = this.turnOrderModal.querySelector('h2');
             const buttons = this.turnOrderModal.querySelectorAll('.turn-option');
             
-            if (data.canChoose) {
-                modalTitle.textContent = '🎮 Choose Who Starts First';
-                buttons.forEach(btn => btn.disabled = false);
-                
-                // Show prominent message for the chooser
-                this.showMessage('🎮 YOU get to choose who starts first! Check the dialog box.', 'success');
-            } else {
-                modalTitle.textContent = '⏳ Waiting for Turn Order Selection';
-                buttons.forEach(btn => btn.disabled = true);
-                
-                // Show message for non-selector
-                this.showMessage('Your opponent is choosing who starts first...', 'info');
-            }
+            modalTitle.textContent = '🎮 Choose Who Starts First';
+            buttons.forEach(btn => btn.disabled = false);
+            
+            // Show prominent message for the chooser
+            this.showMessage('🎮 YOU get to choose who starts first! Check the dialog box.', 'success');
         } else {
             console.error('Turn order modal element not found!');
         }
@@ -548,6 +542,9 @@ class CheckersClient {
     handleTurnOrderSelected(data) {
         console.log('Turn order selected:', data);
         this.updateGameState(data.gameState);
+        
+        // Reset the non-selector message flag since turn order is now selected
+        this.hasShownNonSelectorMessage = false;
         
         // Show message about who is starting
         const message = `${data.startingPlayerName} (${data.currentPlayer}) will start the game!`;
@@ -624,6 +621,11 @@ class CheckersClient {
                 this.turnDisplay.textContent = 'Choose who starts first!';
             } else {
                 this.turnDisplay.textContent = 'Waiting for turn order selection...';
+                // Show message for non-selector when they see the turn selection state
+                if (!this.hasShownNonSelectorMessage) {
+                    this.showMessage('Your opponent is choosing who starts first...', 'info');
+                    this.hasShownNonSelectorMessage = true;
+                }
             }
             turnIndicator.className = 'turn-indicator';
         } else if (this.gameState.gameState === 'finished') {

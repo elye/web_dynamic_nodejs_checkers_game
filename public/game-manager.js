@@ -1,58 +1,33 @@
-// Warn user before leaving or refreshing the page to prevent accidental loss of game state
-window.addEventListener('beforeunload', function (e) {
-    e.preventDefault();
-    e.returnValue = 'Are you sure you want to leave? Your game progress will be lost.';
-});
 /**
- * Online Checkers Game Client
- * Handles UI interactions, WebSocket communication, and game state management
+ * Game Manager
+ * Handles gameplay logic, board interactions, and game state management
  */
 
-class CheckersClient {
+class GameManager {
     constructor() {
         this.socket = null;
         this.gameState = null;
         this.selectedPiece = null;
         this.possibleMoves = [];
         this.playerColor = null;
-        this.playerName = '';
-        this.roomCode = '';
         this.isMyTurn = false;
-        this.hasRequestedNewGame = false; // Track if current player has requested new game
-        this.hasShownNonSelectorMessage = false; // Track if we've shown the non-selector message
+        this.hasRequestedNewGame = false;
+        this.hasShownNonSelectorMessage = false;
+        this.roomManager = null; // Will be set by main script
         
         this.initializeElements();
         this.attachEventListeners();
-        this.connectSocket();
     }
 
     initializeElements() {
-        // Room selection elements
-        this.roomSelection = document.getElementById('room-selection');
-        this.gameContainer = document.getElementById('game-container');
-        this.playerNameInput = document.getElementById('player-name');
-        this.roomCodeInput = document.getElementById('room-code-input');
-        this.createRoomBtn = document.getElementById('create-room');
-        this.joinRoomBtn = document.getElementById('join-room');
-
         // Game elements
         this.gameBoard = document.getElementById('game-board');
-        this.currentRoomCode = document.getElementById('current-room-code');
         this.turnDisplay = document.getElementById('turn-display');
         this.redPlayerName = document.getElementById('red-player-name');
         this.blackPlayerName = document.getElementById('black-player-name');
         
         // Control elements
         this.resetGameBtn = document.getElementById('reset-game');
-        this.leaveRoomBtn = document.getElementById('leave-room');
-        this.copyRoomCodeBtn = document.getElementById('copy-room-code');
-        
-        // Status and messages
-        this.gameMessages = document.getElementById('game-messages');
-        this.toastContainer = document.getElementById('toast-container');
-        this.connectionStatus = document.getElementById('connection-status');
-        this.statusIndicator = document.getElementById('status-indicator');
-        this.statusText = document.getElementById('status-text');
         
         // Modal elements
         this.gameOverModal = document.getElementById('game-over-modal');
@@ -73,12 +48,6 @@ class CheckersClient {
     }
 
     attachEventListeners() {
-        // Room management
-        this.createRoomBtn.addEventListener('click', () => this.createRoom());
-        this.joinRoomBtn.addEventListener('click', () => this.joinRoom());
-        this.leaveRoomBtn.addEventListener('click', () => this.leaveRoom());
-        this.copyRoomCodeBtn.addEventListener('click', () => this.copyRoomCode());
-        
         // Game controls
         this.resetGameBtn.addEventListener('click', () => this.resetGame());
         
@@ -89,47 +58,22 @@ class CheckersClient {
         // Turn Order Modal controls
         this.playerStartsFirstBtn.addEventListener('click', () => this.selectTurnOrder('self'));
         this.opponentStartsFirstBtn.addEventListener('click', () => this.selectTurnOrder('opponent'));
-        
-        // Enter key support
-        this.playerNameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.createRoom();
-        });
-        
-        this.roomCodeInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.joinRoom();
-        });
-
-        // Input formatting
-        this.roomCodeInput.addEventListener('input', (e) => {
-            e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        });
 
         // Prevent context menu on game board
         this.gameBoard.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
-    connectSocket() {
-        this.socket = io();
-        
-        this.socket.on('connect', () => {
-            console.log('Connected to server');
-            this.updateConnectionStatus('connected', 'Connected');
-        });
+    setSocket(socket) {
+        this.socket = socket;
+        this.setupSocketListeners();
+    }
 
-        this.socket.on('disconnect', () => {
-            console.log('Disconnected from server');
-            this.updateConnectionStatus('disconnected', 'Disconnected');
-            this.showMessage('Connection lost. Attempting to reconnect...', 'error');
-        });
+    setRoomManager(roomManager) {
+        this.roomManager = roomManager;
+    }
 
-        this.socket.on('connect_error', () => {
-            console.log('Connection error');
-            this.updateConnectionStatus('disconnected', 'Connection Error');
-        });
-
+    setupSocketListeners() {
         // Game event listeners
-        this.socket.on('player-joined', (data) => this.handlePlayerJoined(data));
-        this.socket.on('player-left', (data) => this.handlePlayerLeft(data));
         this.socket.on('game-state', (data) => this.handleGameState(data));
         this.socket.on('move-made', (data) => this.handleMoveMade(data));
         this.socket.on('move-error', (data) => this.handleMoveError(data));
@@ -140,69 +84,6 @@ class CheckersClient {
         this.socket.on('show-turn-order-selection', (data) => this.handleShowTurnOrderSelection(data));
         this.socket.on('turn-order-selected', (data) => this.handleTurnOrderSelected(data));
         this.socket.on('possible-moves', (data) => this.handlePossibleMoves(data));
-        this.socket.on('error', (data) => this.handleError(data));
-
-        this.updateConnectionStatus('connecting', 'Connecting...');
-    }
-
-    updateConnectionStatus(status, text) {
-        this.statusIndicator.className = `status-indicator ${status}`;
-        this.statusText.textContent = text;
-    }
-
-    async createRoom() {
-        const playerName = this.playerNameInput.value.trim();
-        if (!playerName) {
-            this.showMessage('Please enter your name', 'error');
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/create-room', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            
-            const data = await response.json();
-            if (data.roomCode) {
-                this.joinRoomWithCode(data.roomCode, playerName);
-            }
-        } catch (error) {
-            console.error('Error creating room:', error);
-            this.showMessage('Error creating room. Please try again.', 'error');
-        }
-    }
-
-    joinRoom() {
-        const roomCode = this.roomCodeInput.value.trim().toUpperCase();
-        const playerName = this.playerNameInput.value.trim();
-        
-        if (!playerName) {
-            this.showMessage('Please enter your name', 'error');
-            return;
-        }
-        
-        if (!roomCode) {
-            this.showMessage('Please enter room code', 'error');
-            return;
-        }
-
-        this.joinRoomWithCode(roomCode, playerName);
-    }
-
-    joinRoomWithCode(roomCode, playerName) {
-        this.playerName = playerName;
-        this.roomCode = roomCode;
-        this.socket.emit('join-room', { roomCode, playerName });
-    }
-
-    leaveRoom() {
-        if (confirm('Are you sure you want to leave the room?')) {
-            this.socket.disconnect();
-            this.socket.connect();
-            this.showRoomSelection();
-            this.clearGameState();
-        }
     }
 
     resetGame() {
@@ -258,27 +139,9 @@ class CheckersClient {
         this.closeTurnOrderModal();
         
         const message = choice === 'self' ? 'You chose to start first!' : 'You let your opponent start first!';
-        this.showMessage(message, 'info');
-    }
-
-    copyRoomCode() {
-        navigator.clipboard.writeText(this.roomCode).then(() => {
-            this.showMessage('Room code copied to clipboard!', 'success');
-        }).catch(() => {
-            this.showMessage('Could not copy room code', 'error');
-        });
-    }
-
-    showRoomSelection() {
-        this.roomSelection.classList.remove('hidden');
-        this.gameContainer.classList.add('hidden');
-        this.playerNameInput.value = '';
-        this.roomCodeInput.value = '';
-    }
-
-    showGameContainer() {
-        this.roomSelection.classList.add('hidden');
-        this.gameContainer.classList.remove('hidden');
+        if (this.roomManager) {
+            this.roomManager.showMessage(message, 'info');
+        }
     }
 
     clearGameState() {
@@ -286,35 +149,21 @@ class CheckersClient {
         this.selectedPiece = null;
         this.possibleMoves = [];
         this.playerColor = null;
-        this.roomCode = '';
         this.hasRequestedNewGame = false;
         this.hasShownNonSelectorMessage = false;
-        this.currentRoomCode.textContent = '-';
         this.clearBoard();
-        this.clearMessages();
         // Clear confetti when clearing game state
         this.confettiContainer.classList.add('hidden');
         this.confettiContainer.innerHTML = '';
     }
 
     // Socket event handlers
-    handlePlayerJoined(data) {
-        console.log('Player joined:', data);
-        this.updateGameState(data.gameState);
-        this.showMessage(`Player joined the room`, 'info');
-        this.showGameContainer();
-    }
-
-    handlePlayerLeft(data) {
-        console.log('Player left:', data);
-        this.updateGameState(data.gameState);
-        this.showMessage('Player left the room', 'info');
-    }
-
     handleGameState(data) {
         console.log('Game state received:', data);
         this.updateGameState(data);
-        this.showGameContainer();
+        if (this.roomManager) {
+            this.roomManager.showGameContainer();
+        }
     }
 
     handleMoveMade(data) {
@@ -322,12 +171,12 @@ class CheckersClient {
         this.updateGameState(data.gameState);
         this.clearSelection();
         
-        if (data.capturedPiece) {
-            this.showMessage('Piece captured!', 'info');
+        if (data.capturedPiece && this.roomManager) {
+            this.roomManager.showMessage('Piece captured!', 'info');
         }
         
-        if (data.promoted) {
-            this.showMessage('Piece promoted to king!', 'success');
+        if (data.promoted && this.roomManager) {
+            this.roomManager.showMessage('Piece promoted to king!', 'success');
         }
         
         // Auto-select piece for continued capturing
@@ -338,7 +187,9 @@ class CheckersClient {
 
     handleMoveError(data) {
         console.log('Move error:', data);
-        this.showMessage(data.message, 'error');
+        if (this.roomManager) {
+            this.roomManager.showMessage(data.message, 'error');
+        }
     }
 
     handleGameOver(data) {
@@ -364,7 +215,9 @@ class CheckersClient {
             this.createConfetti();
             
             // Show winner message
-            this.showMessage('🏆 Victory! You are the Checkers Champion! 🏆', 'success');
+            if (this.roomManager) {
+                this.roomManager.showMessage('🏆 Victory! You are the Checkers Champion! 🏆', 'success');
+            }
         } else {
             // Loser styling and consolation
             this.modalContent.classList.add('loser');
@@ -393,11 +246,15 @@ class CheckersClient {
             this.consolationMessage.classList.remove('hidden');
             
             // Show encouraging message
-            this.showMessage('💪 Don\'t give up! Every game makes you stronger!', 'info');
+            if (this.roomManager) {
+                this.roomManager.showMessage('💪 Don\'t give up! Every game makes you stronger!', 'info');
+            }
         }
         
         this.gameOverModal.classList.remove('hidden');
-        this.showMessage(`Game Over! ${winner} player wins!`, isWinner ? 'success' : 'info');
+        if (this.roomManager) {
+            this.roomManager.showMessage(`Game Over! ${winner} player wins!`, isWinner ? 'success' : 'info');
+        }
     }
 
     createConfetti() {
@@ -471,7 +328,9 @@ class CheckersClient {
         this.closeModal();
         this.hasRequestedNewGame = false;
         this.updateNewGameButton();
-        this.showMessage(data.message || 'New game started!', 'success');
+        if (this.roomManager) {
+            this.roomManager.showMessage(data.message || 'New game started!', 'success');
+        }
     }
 
     handleNewGameRequested(data) {
@@ -482,10 +341,12 @@ class CheckersClient {
         this.updateNewGameRequestStatus();
         this.updateNewGameButton();
         
-        if (this.hasRequestedNewGame) {
-            this.showMessage(`Waiting for other player to agree to new game...`, 'info');
-        } else {
-            this.showMessage(`${data.requesterName} wants to start a new game. Click "New Game" to agree!`, 'info');
+        if (this.roomManager) {
+            if (this.hasRequestedNewGame) {
+                this.roomManager.showMessage(`Waiting for other player to agree to new game...`, 'info');
+            } else {
+                this.roomManager.showMessage(`${data.requesterName} wants to start a new game. Click "New Game" to agree!`, 'info');
+            }
         }
     }
 
@@ -497,7 +358,9 @@ class CheckersClient {
         this.updateNewGameRequestStatus();
         this.updateNewGameButton();
         
-        this.showMessage(`${data.requesterName} cancelled their new game request.`, 'info');
+        if (this.roomManager) {
+            this.roomManager.showMessage(`${data.requesterName} cancelled their new game request.`, 'info');
+        }
     }
 
     handleShowTurnOrderSelection(data) {
@@ -522,7 +385,9 @@ class CheckersClient {
             buttons.forEach(btn => btn.disabled = false);
             
             // Show prominent message for the chooser
-            this.showMessage('🎮 YOU get to choose who starts first! Check the dialog box.', 'success');
+            if (this.roomManager) {
+                this.roomManager.showMessage('🎮 YOU get to choose who starts first! Check the dialog box.', 'success');
+            }
         } else {
             console.error('Turn order modal element not found!');
         }
@@ -537,7 +402,9 @@ class CheckersClient {
         
         // Show message about who is starting
         const message = `${data.startingPlayerName} (${data.currentPlayer}) will start the game!`;
-        this.showMessage(message, 'success');
+        if (this.roomManager) {
+            this.roomManager.showMessage(message, 'success');
+        }
     }
 
     handlePossibleMoves(data) {
@@ -553,16 +420,12 @@ class CheckersClient {
         this.highlightPossibleMoves();
     }
 
-    handleError(data) {
-        console.log('Error:', data);
-        this.showMessage(data.message, 'error');
-    }
-
     // Game state management
     updateGameState(gameState) {
         this.gameState = gameState;
-        this.roomCode = gameState.roomCode;
-        this.currentRoomCode.textContent = this.roomCode;
+        if (this.roomManager) {
+            this.roomManager.updateRoomCode(gameState.roomCode);
+        }
         
         // Update player color
         const playerData = Object.entries(gameState.players).find(([id, _]) => id === this.socket.id);
@@ -611,8 +474,8 @@ class CheckersClient {
             } else {
                 this.turnDisplay.textContent = 'Waiting for turn order selection...';
                 // Show message for non-selector when they see the turn selection state
-                if (!this.hasShownNonSelectorMessage) {
-                    this.showMessage('Your opponent is choosing who starts first...', 'info');
+                if (!this.hasShownNonSelectorMessage && this.roomManager) {
+                    this.roomManager.showMessage('Your opponent is choosing who starts first...', 'info');
                     this.hasShownNonSelectorMessage = true;
                 }
             }
@@ -828,13 +691,17 @@ class CheckersClient {
                 
                 // If clicking on a piece that's not the capturing piece, prevent selection
                 if (serverRow !== capturingPiece.row || serverCol !== capturingPiece.col) {
-                    this.showMessage('⚠️ Must continue capturing with the highlighted piece!', 'error');
+                    if (this.roomManager) {
+                        this.roomManager.showMessage('⚠️ Must continue capturing with the highlighted piece!', 'error');
+                    }
                     return;
                 }
             } else {
                 // Check if there are mandatory captures and this piece has no captures
                 if (this.hasMandatoryCaptures() && !this.pieceHasCaptures(serverRow, serverCol)) {
-                    this.showMessage('⚠️ Must capture when possible!', 'error');
+                    if (this.roomManager) {
+                        this.roomManager.showMessage('⚠️ Must capture when possible!', 'error');
+                    }
                     return;
                 }
             }
@@ -979,45 +846,4 @@ class CheckersClient {
         this.socket.emit('make-move', { fromRow, fromCol, toRow, toCol });
         this.clearSelection();
     }
-
-    // UI helper methods
-    showMessage(message, type = 'info') {
-        // Create toast element
-        const toastElement = document.createElement('div');
-        toastElement.className = `toast toast-${type}`;
-        toastElement.textContent = message;
-        
-        // Add to toast container
-        this.toastContainer.appendChild(toastElement);
-        
-        // Trigger animation by adding show class after a brief delay
-        setTimeout(() => {
-            toastElement.classList.add('toast-show');
-        }, 10);
-        
-        // Auto-remove toast after duration based on message length
-        const duration = Math.max(3000, message.length * 50); // Min 3 seconds, +50ms per character
-        const maxDuration = 8000; // Max 8 seconds
-        const finalDuration = Math.min(duration, maxDuration);
-        
-        setTimeout(() => {
-            toastElement.classList.add('toast-hide');
-            
-            // Remove from DOM after hide animation
-            setTimeout(() => {
-                if (toastElement.parentNode) {
-                    toastElement.parentNode.removeChild(toastElement);
-                }
-            }, 300);
-        }, finalDuration);
-    }
-
-    clearMessages() {
-        this.gameMessages.innerHTML = '';
-    }
 }
-
-// Initialize the game when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-    new CheckersClient();
-});

@@ -1,0 +1,304 @@
+/* Room Selection and Management Styles */
+
+/* Room Selection */
+.room-selection {
+    padding: 40px;
+    text-align: center;
+}
+
+.room-card {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.room-card h2 {
+    color: #2c3e50;
+    margin-bottom: 30px;
+    font-size: 1.8rem;
+}
+
+.input-group {
+    margin: 20px 0;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 15px;
+    font-size: 1rem;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.input-group input:focus {
+    border-color: #3498db;
+}
+
+.room-options {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    margin-top: 30px;
+}
+
+.room-option h3 {
+    color: #34495e;
+    margin-bottom: 15px;
+}
+
+/* Room Info and Header */
+.game-header {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: white;
+    padding: 20px;
+    text-align: center;
+}
+
+.game-header h1 {
+    font-size: 2rem;
+    margin-bottom: 15px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.game-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.room-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.room-code-display {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.turn-indicator {
+    font-size: 1.1rem;
+    font-weight: bold;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.turn-indicator.red-turn {
+    background: rgba(231, 76, 60, 0.8);
+}
+
+.turn-indicator.black-turn {
+    background: rgba(52, 73, 94, 0.8);
+}
+
+/* Toast Container */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    width: 400px;
+    max-width: 90vw;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Toast Notifications */
+.toast {
+    background: rgba(0, 0, 0, 0.3);
+    color: white;
+    padding: 14px 20px;
+    border-radius: 25px;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1.4;
+    text-align: center;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    border: 2px solid transparent;
+    backdrop-filter: blur(20px);
+    max-width: 100%;
+    word-wrap: break-word;
+    
+    /* Initial state - hidden */
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.toast-show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.toast-hide {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+}
+
+.toast-info {
+    background: rgba(52, 152, 219, 0.4);
+    border-color: rgba(52, 152, 219, 0.6);
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.toast-success {
+    background: rgba(46, 204, 113, 0.4);
+    border-color: rgba(46, 204, 113, 0.6);
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.toast-error {
+    background: rgba(231, 76, 60, 0.4);
+    border-color: rgba(231, 76, 60, 0.6);
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Connection Status */
+.connection-status {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 8px 15px;
+    border-radius: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    font-size: 0.9rem;
+    z-index: 1000;
+}
+
+.status-indicator {
+    font-size: 1.2rem;
+}
+
+.status-indicator.connected {
+    color: #27ae60;
+}
+
+.status-indicator.disconnected {
+    color: #e74c3c;
+}
+
+.status-indicator.connecting {
+    color: #f39c12;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Buttons */
+.btn {
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+    color: white;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+}
+
+.btn-small {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    min-width: auto;
+}
+
+/* Mobile Responsiveness for Room Management */
+@media (max-width: 768px) {
+    .game-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .game-info {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .room-selection {
+        padding: 20px;
+    }
+
+    .room-options {
+        gap: 20px;
+    }
+
+    .toast-container {
+        width: 300px;
+        top: 15px;
+    }
+
+    .toast {
+        font-size: 13px;
+        padding: 12px 18px;
+    }
+
+    .connection-status {
+        position: relative;
+        bottom: auto;
+        left: auto;
+        margin: 20px;
+        justify-content: center;
+    }
+
+    .btn {
+        padding: 15px 30px;
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .game-header {
+        padding: 15px;
+    }
+
+    .game-header h1 {
+        font-size: 1.3rem;
+    }
+
+    .room-selection {
+        padding: 15px;
+    }
+
+    .btn {
+        width: 100%;
+    }
+}

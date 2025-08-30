@@ -114,9 +114,14 @@ checkers-game/
 ├── package.json           # Dependencies and scripts
 ├── public/                # Frontend files
 │   ├── index.html         # Game interface
-│   ├── style.css          # Styling and responsive design
-│   └── script.js          # Client-side game logic
-└── README.md             # This file
+│   ├── style.css          # Base styling
+│   ├── room-styles.css    # Room management styles
+│   ├── game-styles.css    # Game board and gameplay styles
+│   ├── main.js            # Entry point and coordinator
+│   ├── room-manager.js    # Room creation and management logic
+│   └── game-manager.js    # Game board and gameplay logic
+├── README.md             # This file
+└── REFACTORING_README.md # Details about the new modular structure
 ```
 
 ## API Endpoints

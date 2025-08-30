@@ -528,15 +528,6 @@ class CheckersClient {
         }
     }
 
-    // Test method to manually show the modal (for debugging)
-    testShowModal() {
-        console.log('Test: Showing turn order modal');
-        if (this.turnOrderModal) {
-            this.turnOrderModal.classList.remove('hidden');
-            console.log('Test modal shown');
-        }
-    }
-
     handleTurnOrderSelected(data) {
         console.log('Turn order selected:', data);
         this.updateGameState(data.gameState);

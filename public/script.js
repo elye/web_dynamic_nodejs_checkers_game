@@ -698,11 +698,9 @@ class CheckersClient {
                     const capturingPiece = this.gameState.capturingPiece;
                     if (serverRow === capturingPiece.row && serverCol === capturingPiece.col) {
                         pieceElement.classList.add('must-capture');
-                        pieceElement.draggable = true;
                         captureableCount = 1;
                     } else {
                         pieceElement.classList.add('disabled');
-                        pieceElement.draggable = false;
                     }
                     hasMandatory = true;
                 } else {
@@ -712,23 +710,16 @@ class CheckersClient {
                         hasMandatory = true;
                         if (this.pieceHasCaptures(serverRow, serverCol)) {
                             pieceElement.classList.add('must-capture');
-                            pieceElement.draggable = true;
                             captureableCount++;
                         } else {
                             pieceElement.classList.add('disabled');
-                            pieceElement.draggable = false;
                         }
-                    } else {
-                        // No mandatory captures, piece is selectable
-                        pieceElement.draggable = true;
                     }
+                    // No need to set draggable since we're removing drag functionality
                 }
             } else {
-                // Not our turn or not our piece - remove all state classes and disable dragging
+                // Not our turn or not our piece - remove all state classes
                 pieceElement.classList.remove('disabled', 'must-capture');
-                if (piece && piece.color !== this.playerColor) {
-                    pieceElement.draggable = false;
-                }
             }
         });
     }
@@ -816,15 +807,6 @@ class CheckersClient {
         pieceElement.dataset.displayCol = displayCol;
         pieceElement.dataset.serverRow = serverRow;
         pieceElement.dataset.serverCol = serverCol;
-        
-        // Add drag and drop support (only if piece is not disabled)
-        if (!pieceClass.includes('disabled')) {
-            pieceElement.draggable = true;
-            pieceElement.addEventListener('dragstart', (e) => this.handleDragStart(e, displayRow, displayCol, serverRow, serverCol));
-            pieceElement.addEventListener('dragend', (e) => this.handleDragEnd(e));
-        } else {
-            pieceElement.draggable = false;
-        }
         
         return pieceElement;
     }
@@ -926,94 +908,6 @@ class CheckersClient {
         }
 
         return false;
-    }
-
-    handleDragStart(event, displayRow, displayCol, serverRow, serverCol) {
-        if (!this.isMyTurn || this.gameState.gameState !== 'playing') {
-            event.preventDefault();
-            return;
-        }
-        
-        const piece = this.gameState.board[serverRow][serverCol];
-        if (!piece || piece.color !== this.playerColor) {
-            event.preventDefault();
-            return;
-        }
-        
-        // If must capture with specific piece, only allow that piece to be dragged
-        if (this.gameState.mustCapture && this.gameState.capturingPiece) {
-            const capturingPiece = this.gameState.capturingPiece;
-            if (serverRow !== capturingPiece.row || serverCol !== capturingPiece.col) {
-                event.preventDefault();
-                this.showMessage('⚠️ Must continue capturing with the highlighted piece!', 'error');
-                return;
-            }
-        } else {
-            // Check if there are mandatory captures and this piece has no captures
-            if (this.hasMandatoryCaptures() && !this.pieceHasCaptures(serverRow, serverCol)) {
-                event.preventDefault();
-                this.showMessage('⚠️ Must capture when possible!', 'error');
-                return;
-            }
-        }
-        
-        this.selectPiece(displayRow, displayCol, serverRow, serverCol);
-        event.target.classList.add('dragging');
-        
-        // Set drag data
-        event.dataTransfer.setData('text/plain', JSON.stringify({ displayRow, displayCol, serverRow, serverCol }));
-        event.dataTransfer.effectAllowed = 'move';
-        
-        // Add drop listeners to valid targets
-        setTimeout(() => this.addDropListeners(), 0);
-    }
-
-    handleDragEnd(event) {
-        event.target.classList.remove('dragging');
-        this.removeDropListeners();
-    }
-
-    addDropListeners() {
-        const squares = document.querySelectorAll('.square');
-        squares.forEach(square => {
-            square.addEventListener('dragover', this.handleDragOver);
-            square.addEventListener('drop', this.handleDrop);
-        });
-    }
-
-    removeDropListeners() {
-        const squares = document.querySelectorAll('.square');
-        squares.forEach(square => {
-            square.removeEventListener('dragover', this.handleDragOver);
-            square.removeEventListener('drop', this.handleDrop);
-        });
-    }
-
-    handleDragOver = (event) => {
-        const displayRow = parseInt(event.currentTarget.dataset.displayRow);
-        const displayCol = parseInt(event.currentTarget.dataset.displayCol);
-        
-        const isPossibleMove = this.possibleMoves.some(move => move.row === displayRow && move.col === displayCol);
-        if (isPossibleMove) {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'move';
-        }
-    }
-
-    handleDrop = (event) => {
-        event.preventDefault();
-        
-        const displayRow = parseInt(event.currentTarget.dataset.displayRow);
-        const displayCol = parseInt(event.currentTarget.dataset.displayCol);
-        const serverRow = parseInt(event.currentTarget.dataset.serverRow);
-        const serverCol = parseInt(event.currentTarget.dataset.serverCol);
-        
-        if (this.selectedPiece) {
-            const isPossibleMove = this.possibleMoves.some(move => move.row === displayRow && move.col === displayCol);
-            if (isPossibleMove) {
-                this.makeMove(this.selectedPiece.serverRow, this.selectedPiece.serverCol, serverRow, serverCol);
-            }
-        }
     }
 
     selectPiece(displayRow, displayCol, serverRow, serverCol) {

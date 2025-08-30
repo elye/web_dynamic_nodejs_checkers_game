@@ -54,11 +54,12 @@ class Utils {
         toastContainer.appendChild(toast);
 
         // Trigger animation
-        setTimeout(() => toast.classList.add('show'), 100);
+        setTimeout(() => toast.classList.add('toast-show'), 100);
 
         // Auto remove
         setTimeout(() => {
-            toast.classList.remove('show');
+            toast.classList.remove('toast-show');
+            toast.classList.add('toast-hide');
             setTimeout(() => {
                 if (toast.parentNode) {
                     toast.parentNode.removeChild(toast);

@@ -73,7 +73,7 @@ class RoomManager {
         this.socket.on('disconnect', () => {
             console.log('Disconnected from server');
             this.updateConnectionStatus('disconnected', 'Disconnected');
-            this.showMessage('Connection lost. Attempting to reconnect...', 'error');
+            Utils.showToast('Connection lost. Attempting to reconnect...', 'error');
         });
 
         this.socket.on('connect_error', () => {
@@ -97,7 +97,7 @@ class RoomManager {
     async createRoom() {
         const playerName = this.playerNameInput.value.trim();
         if (!playerName) {
-            this.showMessage('Please enter your name', 'error');
+            Utils.showToast('Please enter your name', 'error');
             return;
         }
 
@@ -113,7 +113,7 @@ class RoomManager {
             }
         } catch (error) {
             console.error('Error creating room:', error);
-            this.showMessage('Error creating room. Please try again.', 'error');
+            Utils.showToast('Error creating room. Please try again.', 'error');
         }
     }
 
@@ -122,12 +122,12 @@ class RoomManager {
         const playerName = this.playerNameInput.value.trim();
         
         if (!playerName) {
-            this.showMessage('Please enter your name', 'error');
+            Utils.showToast('Please enter your name', 'error');
             return;
         }
         
         if (!roomCode) {
-            this.showMessage('Please enter room code', 'error');
+            Utils.showToast('Please enter room code', 'error');
             return;
         }
 
@@ -153,10 +153,12 @@ class RoomManager {
     }
 
     copyRoomCode() {
-        navigator.clipboard.writeText(this.roomCode).then(() => {
-            this.showMessage('Room code copied to clipboard!', 'success');
-        }).catch(() => {
-            this.showMessage('Could not copy room code', 'error');
+        Utils.copyToClipboard(this.roomCode).then(success => {
+            if (success) {
+                Utils.showToast('Room code copied to clipboard!', 'success');
+            } else {
+                Utils.showToast('Could not copy room code', 'error');
+            }
         });
     }
 
@@ -183,7 +185,7 @@ class RoomManager {
         if (this.gameManager) {
             this.gameManager.updateGameState(data.gameState);
         }
-        this.showMessage(`Player joined the room`, 'info');
+        Utils.showToast(`Player joined the room`, 'info');
         this.showGameContainer();
     }
 
@@ -192,48 +194,16 @@ class RoomManager {
         if (this.gameManager) {
             this.gameManager.updateGameState(data.gameState);
         }
-        this.showMessage('Player left the room', 'info');
+        Utils.showToast('Player left the room', 'info');
     }
 
     handleError(data) {
         console.log('Error:', data);
-        this.showMessage(data.message, 'error');
+        Utils.showToast(data.message, 'error');
     }
 
     updateRoomCode(roomCode) {
         this.roomCode = roomCode;
         this.currentRoomCode.textContent = roomCode;
-    }
-
-    // UI helper methods
-    showMessage(message, type = 'info') {
-        // Create toast element
-        const toastElement = document.createElement('div');
-        toastElement.className = `toast toast-${type}`;
-        toastElement.textContent = message;
-        
-        // Add to toast container
-        this.toastContainer.appendChild(toastElement);
-        
-        // Trigger animation by adding show class after a brief delay
-        setTimeout(() => {
-            toastElement.classList.add('toast-show');
-        }, 10);
-        
-        // Auto-remove toast after duration based on message length
-        const duration = Math.max(3000, message.length * 50); // Min 3 seconds, +50ms per character
-        const maxDuration = 8000; // Max 8 seconds
-        const finalDuration = Math.min(duration, maxDuration);
-        
-        setTimeout(() => {
-            toastElement.classList.add('toast-hide');
-            
-            // Remove from DOM after hide animation
-            setTimeout(() => {
-                if (toastElement.parentNode) {
-                    toastElement.parentNode.removeChild(toastElement);
-                }
-            }, 300);
-        }, finalDuration);
     }
 }

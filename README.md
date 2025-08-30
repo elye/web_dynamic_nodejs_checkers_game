@@ -112,17 +112,69 @@ A real-time multiplayer checkers game built with Node.js, Socket.io, and vanilla
 checkers-game/
 ├── server.js              # Express + Socket.io backend
 ├── package.json           # Dependencies and scripts
+├── render.yaml            # Render deployment configuration
 ├── public/                # Frontend files
 │   ├── index.html         # Game interface
-│   ├── style.css          # Base styling
-│   ├── room-styles.css    # Room management styles
-│   ├── game-styles.css    # Game board and gameplay styles
 │   ├── main.js            # Entry point and coordinator
-│   ├── room-manager.js    # Room creation and management logic
-│   └── game-manager.js    # Game board and gameplay logic
-├── README.md             # This file
-└── REFACTORING_README.md # Details about the new modular structure
+│   ├── components/        # Modular frontend components
+│   │   ├── room/          # Room management module
+│   │   │   ├── room-manager.js    # Room creation and management logic
+│   │   │   └── room-styles.css    # Room-specific styles
+│   │   ├── game/          # Game play module
+│   │   │   ├── game-manager.js    # Game board and gameplay logic
+│   │   │   └── game-styles.css    # Game board and gameplay styles
+│   │   └── shared/        # Shared utilities
+│   │       └── utils.js           # Common utility functions
+│   └── styles/            # Global styles
+│       └── style.css              # Base styling
+├── src/                   # Backend source code
+│   ├── controllers/       # Request handlers
+│   │   ├── GameController.js    # Game logic controller
+│   │   └── SocketController.js  # Socket.io event handlers
+│   ├── game/              # Game engine
+│   │   └── CheckersGame.js      # Core checkers game logic
+│   ├── routes/            # API route definitions
+│   │   └── api.js               # REST API routes
+│   └── utils/             # Utility functions
+│       └── gameUtils.js         # Game helper functions
+├── views/                 # Server-side view templates (if any)
+└── README.md             # This file
 ```
+
+## Architecture Overview
+
+### Backend Components
+
+1. **server.js** - Main entry point that orchestrates all components
+2. **CheckersGame.js** - Pure game logic with no external dependencies  
+3. **GameController.js** - Manages game instances and room lifecycle
+4. **SocketController.js** - Handles all Socket.IO events and real-time communication
+5. **api.js** - REST API endpoints for HTTP requests
+6. **gameUtils.js** - Utility functions for room management
+
+### Frontend Components
+
+1. **main.js** - Entry point and coordinator between room and game managers
+2. **room-manager.js** - Handles room creation, joining, and management
+3. **game-manager.js** - Manages game board, piece movement, and gameplay logic
+4. **utils.js** - Shared utility functions (toast notifications, clipboard, validation)
+
+### Key Design Patterns
+
+- **Controller Pattern**: Separates business logic from routes
+- **Component-Based Architecture**: Modular frontend with clear separation of concerns
+- **Dependency Injection**: Controllers receive dependencies through constructors
+- **Single Responsibility**: Each class/module has one primary purpose
+- **Encapsulation**: Game state and logic is contained within respective classes
+
+### Benefits of This Structure
+
+- **Separation of Concerns**: Each file has a single responsibility
+- **Testability**: Pure game logic can be tested independently
+- **Maintainability**: Easy to locate and modify specific functionality
+- **Scalability**: Easy to add new features or modify existing ones
+- **Code Reusability**: Components can be reused or replaced independently
+- **Modular Frontend**: Component-based structure makes UI development more organized
 
 ## API Endpoints
 

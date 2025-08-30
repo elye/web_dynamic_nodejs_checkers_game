@@ -140,7 +140,7 @@ class GameManager {
         
         const message = choice === 'self' ? 'You chose to start first!' : 'You let your opponent start first!';
         if (this.roomManager) {
-            this.roomManager.showMessage(message, 'info');
+            Utils.showToast(message, 'info');
         }
     }
 
@@ -172,11 +172,11 @@ class GameManager {
         this.clearSelection();
         
         if (data.capturedPiece && this.roomManager) {
-            this.roomManager.showMessage('Piece captured!', 'info');
+            Utils.showToast('Piece captured!', 'info');
         }
         
         if (data.promoted && this.roomManager) {
-            this.roomManager.showMessage('Piece promoted to king!', 'success');
+            Utils.showToast('Piece promoted to king!', 'success');
         }
         
         // Auto-select piece for continued capturing
@@ -188,7 +188,7 @@ class GameManager {
     handleMoveError(data) {
         console.log('Move error:', data);
         if (this.roomManager) {
-            this.roomManager.showMessage(data.message, 'error');
+            Utils.showToast(data.message, 'error');
         }
     }
 
@@ -216,7 +216,7 @@ class GameManager {
             
             // Show winner message
             if (this.roomManager) {
-                this.roomManager.showMessage('🏆 Victory! You are the Checkers Champion! 🏆', 'success');
+                Utils.showToast('🏆 Victory! You are the Checkers Champion! 🏆', 'success');
             }
         } else {
             // Loser styling and consolation
@@ -247,13 +247,13 @@ class GameManager {
             
             // Show encouraging message
             if (this.roomManager) {
-                this.roomManager.showMessage('💪 Don\'t give up! Every game makes you stronger!', 'info');
+                Utils.showToast('💪 Don\'t give up! Every game makes you stronger!', 'info');
             }
         }
         
         this.gameOverModal.classList.remove('hidden');
         if (this.roomManager) {
-            this.roomManager.showMessage(`Game Over! ${winner} player wins!`, isWinner ? 'success' : 'info');
+            Utils.showToast(`Game Over! ${winner} player wins!`, isWinner ? 'success' : 'info');
         }
     }
 
@@ -329,7 +329,7 @@ class GameManager {
         this.hasRequestedNewGame = false;
         this.updateNewGameButton();
         if (this.roomManager) {
-            this.roomManager.showMessage(data.message || 'New game started!', 'success');
+            Utils.showToast(data.message || 'New game started!', 'success');
         }
     }
 
@@ -343,9 +343,9 @@ class GameManager {
         
         if (this.roomManager) {
             if (this.hasRequestedNewGame) {
-                this.roomManager.showMessage(`Waiting for other player to agree to new game...`, 'info');
+                Utils.showToast(`Waiting for other player to agree to new game...`, 'info');
             } else {
-                this.roomManager.showMessage(`${data.requesterName} wants to start a new game. Click "New Game" to agree!`, 'info');
+                Utils.showToast(`${data.requesterName} wants to start a new game. Click "New Game" to agree!`, 'info');
             }
         }
     }
@@ -359,7 +359,7 @@ class GameManager {
         this.updateNewGameButton();
         
         if (this.roomManager) {
-            this.roomManager.showMessage(`${data.requesterName} cancelled their new game request.`, 'info');
+            Utils.showToast(`${data.requesterName} cancelled their new game request.`, 'info');
         }
     }
 
@@ -386,7 +386,7 @@ class GameManager {
             
             // Show prominent message for the chooser
             if (this.roomManager) {
-                this.roomManager.showMessage('🎮 YOU get to choose who starts first! Check the dialog box.', 'success');
+                Utils.showToast('🎮 YOU get to choose who starts first! Check the dialog box.', 'success');
             }
         } else {
             console.error('Turn order modal element not found!');
@@ -403,7 +403,7 @@ class GameManager {
         // Show message about who is starting
         const message = `${data.startingPlayerName} (${data.currentPlayer}) will start the game!`;
         if (this.roomManager) {
-            this.roomManager.showMessage(message, 'success');
+            Utils.showToast(message, 'success');
         }
     }
 
@@ -475,7 +475,7 @@ class GameManager {
                 this.turnDisplay.textContent = 'Waiting for turn order selection...';
                 // Show message for non-selector when they see the turn selection state
                 if (!this.hasShownNonSelectorMessage && this.roomManager) {
-                    this.roomManager.showMessage('Your opponent is choosing who starts first...', 'info');
+                    Utils.showToast('Your opponent is choosing who starts first...', 'info');
                     this.hasShownNonSelectorMessage = true;
                 }
             }
@@ -692,7 +692,7 @@ class GameManager {
                 // If clicking on a piece that's not the capturing piece, prevent selection
                 if (serverRow !== capturingPiece.row || serverCol !== capturingPiece.col) {
                     if (this.roomManager) {
-                        this.roomManager.showMessage('⚠️ Must continue capturing with the highlighted piece!', 'error');
+                        Utils.showToast('⚠️ Must continue capturing with the highlighted piece!', 'error');
                     }
                     return;
                 }
@@ -700,7 +700,7 @@ class GameManager {
                 // Check if there are mandatory captures and this piece has no captures
                 if (this.hasMandatoryCaptures() && !this.pieceHasCaptures(serverRow, serverCol)) {
                     if (this.roomManager) {
-                        this.roomManager.showMessage('⚠️ Must capture when possible!', 'error');
+                        Utils.showToast('⚠️ Must capture when possible!', 'error');
                     }
                     return;
                 }

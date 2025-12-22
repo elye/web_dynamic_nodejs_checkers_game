@@ -13,7 +13,7 @@
 class CheckersGame {
     constructor(roomCode) {
         this.roomCode = roomCode;
-        this.players = {};
+        this.players = {}; // sessionId -> {name, color, disconnected, disconnectTime}
         this.currentPlayer = 'red'; // Default, can be changed by turn order selection
         this.gameState = 'waiting'; // waiting, playing, finished, turn_selection
         this.winner = null;
@@ -50,40 +50,93 @@ class CheckersGame {
         return board;
     }
 
-    addPlayer(playerId, playerName) {
+    addPlayer(sessionId, playerName, socketId) {
+        // Check if player is reconnecting
+        if (this.players[sessionId]) {
+            const player = this.players[sessionId];
+            // Player reconnecting - mark as connected
+            player.disconnected = false;
+            player.disconnectTime = null;
+            
+            return { reconnected: true, color: player.color };
+        }
+        
+        // New player joining
         if (Object.keys(this.players).length >= 2) {
-            return false;
+            return { success: false };
         }
 
-        const color = Object.keys(this.players).length === 0 ? 'red' : 'black';
-        this.players[playerId] = { name: playerName, color: color };
+        // Assign color: if room is empty, assign red. Otherwise, assign the opposite of existing player
+        let color;
+        if (Object.keys(this.players).length === 0) {
+            color = 'red';
+        } else {
+            // Find the existing player's color and assign the opposite
+            const existingPlayer = Object.values(this.players)[0];
+            color = existingPlayer.color === 'red' ? 'black' : 'red';
+        }
+        
+        this.players[sessionId] = { 
+            name: playerName, 
+            color: color,
+            disconnected: false,
+            disconnectTime: null
+        };
         
         if (Object.keys(this.players).length === 2) {
             // Both players joined - prepare for turn order selection
             this.gameState = 'turn_selection';
             this.waitingForTurnOrderSelection = true;
             
-            // The first player (red) gets to choose turn order
-            const redPlayer = Object.entries(this.players).find(([id, player]) => player.color === 'red');
-            this.turnOrderSelector = redPlayer[0];
+            // The player who was already in the room gets to choose turn order
+            // (this is the first sessionId we find that isn't the current one)
+            const existingPlayer = Object.keys(this.players).find(id => id !== sessionId);
+            this.turnOrderSelector = existingPlayer || sessionId;
+        }
+        
+        return { success: true, color: color };
+    }
+
+    markPlayerDisconnected(sessionId) {
+        if (!this.players[sessionId]) return null;
+        
+        const player = this.players[sessionId];
+        player.disconnected = true;
+        player.disconnectTime = Date.now();
+        
+        return player;
+    }
+    
+    removePlayer(sessionId) {
+        delete this.players[sessionId];
+        if (this.newGameRequests) {
+            this.newGameRequests.delete(sessionId);
+        }
+        
+        // Check if we should reset game state
+        const activePlayers = Object.values(this.players).filter(p => !p.disconnected).length;
+        if (activePlayers === 0) {
+            this.gameState = 'finished';
+        } else if (activePlayers === 1 && this.gameState === 'playing') {
+            // One player left, go back to waiting
+            this.gameState = 'waiting';
         }
         
         return true;
     }
 
-    removePlayer(playerId) {
-        delete this.players[playerId];
-        if (this.newGameRequests) {
-            this.newGameRequests.delete(playerId);
+    isValidMove(fromRow, fromCol, toRow, toCol, sessionId) {
+        if (!sessionId || !this.players[sessionId]) {
+            return { valid: false, reason: 'Player not found' };
         }
-        if (Object.keys(this.players).length === 0) {
-            this.gameState = 'finished';
+        
+        const player = this.players[sessionId];
+        if (player.disconnected) {
+            return { valid: false, reason: 'Player is disconnected' };
         }
-    }
-
-    isValidMove(fromRow, fromCol, toRow, toCol, playerId) {
+        
         // Check if it's player's turn
-        if (this.players[playerId].color !== this.currentPlayer) {
+        if (player.color !== this.currentPlayer) {
             return { valid: false, reason: 'Not your turn' };
         }
 
@@ -206,8 +259,8 @@ class CheckersGame {
         return captures;
     }
 
-    makeMove(fromRow, fromCol, toRow, toCol, playerId) {
-        const validation = this.isValidMove(fromRow, fromCol, toRow, toCol, playerId);
+    makeMove(fromRow, fromCol, toRow, toCol, sessionId) {
+        const validation = this.isValidMove(fromRow, fromCol, toRow, toCol, sessionId);
         if (!validation.valid) {
             return { success: false, reason: validation.reason };
         }
@@ -368,13 +421,13 @@ class CheckersGame {
         return moves;
     }
 
-    selectTurnOrder(playerId, choice) {
+    selectTurnOrder(sessionId, choice) {
         // Only the designated selector can choose turn order
-        if (playerId !== this.turnOrderSelector || !this.waitingForTurnOrderSelection) {
+        if (sessionId !== this.turnOrderSelector || !this.waitingForTurnOrderSelection) {
             return { success: false, reason: 'Not authorized to select turn order' };
         }
 
-        const selectorPlayer = this.players[playerId];
+        const selectorPlayer = this.players[sessionId];
         
         if (choice === 'self') {
             // Selector starts first - keep their color as current player
@@ -413,9 +466,9 @@ class CheckersGame {
             this.gameState = 'turn_selection';
             this.waitingForTurnOrderSelection = true;
             
-            // The red player gets to choose turn order (or we can randomize this)
-            const redPlayer = Object.entries(this.players).find(([id, player]) => player.color === 'red');
-            this.turnOrderSelector = redPlayer ? redPlayer[0] : Object.keys(this.players)[0];
+            // The first player in the players object gets to choose turn order
+            // (maintains consistency - first to join/stay gets choice)
+            this.turnOrderSelector = Object.keys(this.players)[0];
         } else {
             // Single player or no players
             this.gameState = playerCount === 1 ? 'waiting' : 'waiting';
@@ -424,12 +477,14 @@ class CheckersGame {
         }
     }
 
-    requestNewGame(playerId) {
+    requestNewGame(sessionId) {
+        if (!sessionId) return { approved: false, reason: 'Invalid session' };
+        
         if (!this.newGameRequests) {
             this.newGameRequests = new Set();
         }
         
-        this.newGameRequests.add(playerId);
+        this.newGameRequests.add(sessionId);
         
         // Check if both players have requested a new game
         const playerCount = Object.keys(this.players).length;
@@ -447,9 +502,9 @@ class CheckersGame {
         }
     }
 
-    cancelNewGameRequest(playerId) {
-        if (this.newGameRequests) {
-            this.newGameRequests.delete(playerId);
+    cancelNewGameRequest(sessionId) {
+        if (sessionId && this.newGameRequests) {
+            this.newGameRequests.delete(sessionId);
         }
     }
 

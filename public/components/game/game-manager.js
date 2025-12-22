@@ -6,6 +6,7 @@
 class GameManager {
     constructor() {
         this.socket = null;
+        this.sessionId = null;
         this.gameState = null;
         this.selectedPiece = null;
         this.possibleMoves = [];
@@ -70,6 +71,10 @@ class GameManager {
 
     setRoomManager(roomManager) {
         this.roomManager = roomManager;
+    }
+
+    setSessionId(sessionId) {
+        this.sessionId = sessionId;
     }
 
     setupSocketListeners() {
@@ -427,18 +432,14 @@ class GameManager {
             this.roomManager.updateRoomCode(gameState.roomCode);
         }
         
-        // Update player color
-        const playerData = Object.entries(gameState.players).find(([id, _]) => id === this.socket.id);
+        // Update player color - use sessionId instead of socket.id
+        const playerData = Object.entries(gameState.players).find(([sessionId, _]) => sessionId === this.sessionId);
         if (playerData) {
             this.playerColor = playerData[1].color;
         }
         
-        // Update player names
-        const redPlayer = Object.values(gameState.players).find(p => p.color === 'red');
-        const blackPlayer = Object.values(gameState.players).find(p => p.color === 'black');
-        
-        this.redPlayerName.textContent = redPlayer ? redPlayer.name : 'Waiting...';
-        this.blackPlayerName.textContent = blackPlayer ? blackPlayer.name : 'Waiting...';
+        // Update player names with disconnection status
+        this.updatePlayerNames();
         
         // Update turn indicator
         this.updateTurnDisplay();
@@ -460,6 +461,50 @@ class GameManager {
         }
     }
 
+    updatePlayerNames() {
+        if (!this.gameState) return;
+        
+        const redPlayer = Object.values(this.gameState.players).find(p => p.color === 'red');
+        const blackPlayer = Object.values(this.gameState.players).find(p => p.color === 'black');
+        
+        // Update red player name
+        if (redPlayer) {
+            const redText = redPlayer.name;
+            const redStatus = redPlayer.disconnected ? ' (disconnected)' : '';
+            this.redPlayerName.textContent = redText + redStatus;
+            this.redPlayerName.classList.toggle('disconnected', redPlayer.disconnected);
+        } else {
+            this.redPlayerName.textContent = 'Waiting...';
+            this.redPlayerName.classList.remove('disconnected');
+        }
+        
+        // Update black player name
+        if (blackPlayer) {
+            const blackText = blackPlayer.name;
+            const blackStatus = blackPlayer.disconnected ? ' (disconnected)' : '';
+            this.blackPlayerName.textContent = blackText + blackStatus;
+            this.blackPlayerName.classList.toggle('disconnected', blackPlayer.disconnected);
+        } else {
+            this.blackPlayerName.textContent = 'Waiting...';
+            this.blackPlayerName.classList.remove('disconnected');
+        }
+    }
+
+    updateDisconnectedPlayerDisplay(sessionId, remainingSeconds) {
+        if (!this.gameState || !this.gameState.players[sessionId]) return;
+        
+        const player = this.gameState.players[sessionId];
+        const statusText = ` (disconnected... ${remainingSeconds}s)`;
+        
+        if (player.color === 'red') {
+            this.redPlayerName.textContent = player.name + statusText;
+            this.redPlayerName.classList.add('disconnected');
+        } else if (player.color === 'black') {
+            this.blackPlayerName.textContent = player.name + statusText;
+            this.blackPlayerName.classList.add('disconnected');
+        }
+    }
+
     updateTurnDisplay() {
         if (!this.gameState) return;
         
@@ -469,7 +514,7 @@ class GameManager {
             this.turnDisplay.textContent = 'Waiting for players...';
             turnIndicator.className = 'turn-indicator';
         } else if (this.gameState.gameState === 'turn_selection') {
-            if (this.gameState.turnOrderSelector === this.socket.id) {
+            if (this.gameState.turnOrderSelector === this.sessionId) {
                 this.turnDisplay.textContent = 'Choose who starts first!';
             } else {
                 this.turnDisplay.textContent = 'Waiting for turn order selection...';
@@ -505,7 +550,7 @@ class GameManager {
 
     updateNewGameRequestStatus() {
         if (this.gameState && this.gameState.newGameRequests) {
-            this.hasRequestedNewGame = this.gameState.newGameRequests.includes(this.socket.id);
+            this.hasRequestedNewGame = this.gameState.newGameRequests.includes(this.sessionId);
         } else {
             this.hasRequestedNewGame = false;
         }

@@ -174,6 +174,13 @@
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
 }
 
+.toast-warning {
+    background: rgba(243, 156, 18, 0.4);
+    border-color: rgba(243, 156, 18, 0.6);
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
 /* Connection Status */
 .connection-status {
     position: fixed;
@@ -205,6 +212,11 @@
 .status-indicator.connecting {
     color: #f39c12;
     animation: pulse 1.5s infinite;
+}
+
+.status-indicator.reconnecting {
+    color: #f39c12;
+    animation: pulse 1s infinite;
 }
 
 @keyframes pulse {

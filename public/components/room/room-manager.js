@@ -8,7 +8,11 @@ class RoomManager {
         this.socket = null;
         this.playerName = '';
         this.roomCode = '';
+        this.sessionId = null;
         this.gameManager = null; // Will be set by main script
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 10;
+        this.disconnectTimers = {}; // Track disconnection timers for players
         
         this.initializeElements();
         this.attachEventListeners();
@@ -64,26 +68,83 @@ class RoomManager {
         this.gameManager = gameManager;
     }
 
+    setSessionId(sessionId) {
+        this.sessionId = sessionId;
+    }
+
     setupSocketListeners() {
         this.socket.on('connect', () => {
             console.log('Connected to server');
+            this.reconnectAttempts = 0;
             this.updateConnectionStatus('connected', 'Connected');
+            
+            // Load persisted room data
+            const savedRoomCode = localStorage.getItem('checkers_room_code');
+            const savedPlayerName = localStorage.getItem('checkers_player_name');
+            
+            // If we have saved room data, try to rejoin automatically
+            // The server will validate if we can rejoin or if we were removed
+            if (savedRoomCode && savedPlayerName) {
+                console.log('Attempting to rejoin room:', savedRoomCode);
+                this.roomCode = savedRoomCode;
+                this.playerName = savedPlayerName;
+                // Don't call joinRoomWithCode here to avoid re-saving to localStorage
+                // Just emit the join event
+                this.socket.emit('join-room', { 
+                    roomCode: savedRoomCode, 
+                    playerName: savedPlayerName, 
+                    sessionId: this.sessionId 
+                });
+            }
         });
 
-        this.socket.on('disconnect', () => {
-            console.log('Disconnected from server');
+        this.socket.on('disconnect', (reason) => {
+            console.log('Disconnected from server. Reason:', reason);
             this.updateConnectionStatus('disconnected', 'Disconnected');
             Utils.showToast('Connection lost. Attempting to reconnect...', 'error');
+        });
+
+        this.socket.on('reconnect_attempt', (attemptNumber) => {
+            this.reconnectAttempts = attemptNumber;
+            this.updateConnectionStatus('reconnecting', `Reconnecting... (${attemptNumber}/${this.maxReconnectAttempts})`);
+            console.log(`Reconnection attempt ${attemptNumber}`);
+        });
+
+        this.socket.on('reconnect', (attemptNumber) => {
+            console.log(`Reconnected after ${attemptNumber} attempts`);
+            this.updateConnectionStatus('connected', 'Reconnected');
+            Utils.showToast('Reconnected successfully!', 'success');
+        });
+
+        this.socket.on('reconnect_failed', () => {
+            console.log('Reconnection failed');
+            this.updateConnectionStatus('disconnected', 'Connection Failed');
+            Utils.showToast('Unable to reconnect. Please refresh the page.', 'error');
         });
 
         this.socket.on('connect_error', () => {
             console.log('Connection error');
             this.updateConnectionStatus('disconnected', 'Connection Error');
         });
+        
+        // Handle server request to clear session data
+        this.socket.on('clear-session-data', () => {
+            console.log('Clearing session data as requested by server');
+            localStorage.removeItem('checkers_room_code');
+            localStorage.removeItem('checkers_player_name');
+            this.roomCode = '';
+            this.playerName = '';
+            this.showRoomSelection();
+        });
 
         // Room-specific events
         this.socket.on('player-joined', (data) => this.handlePlayerJoined(data));
         this.socket.on('player-left', (data) => this.handlePlayerLeft(data));
+        this.socket.on('player-disconnected', (data) => this.handlePlayerDisconnected(data));
+        this.socket.on('player-reconnected', (data) => this.handlePlayerReconnected(data));
+        this.socket.on('player-removed', (data) => this.handlePlayerRemoved(data));
+        this.socket.on('session-removed', (data) => this.handleSessionRemoved(data));
+        this.socket.on('reconnected', (data) => this.handleReconnected(data));
         this.socket.on('error', (data) => this.handleError(data));
 
         this.updateConnectionStatus('connecting', 'Connecting...');
@@ -137,11 +198,20 @@ class RoomManager {
     joinRoomWithCode(roomCode, playerName) {
         this.playerName = playerName;
         this.roomCode = roomCode;
-        this.socket.emit('join-room', { roomCode, playerName });
+        
+        // Persist room data for auto-reconnection
+        localStorage.setItem('checkers_room_code', roomCode);
+        localStorage.setItem('checkers_player_name', playerName);
+        
+        this.socket.emit('join-room', { roomCode, playerName, sessionId: this.sessionId });
     }
 
     leaveRoom() {
         if (confirm('Are you sure you want to leave the room?')) {
+            // Clear persisted room data
+            localStorage.removeItem('checkers_room_code');
+            localStorage.removeItem('checkers_player_name');
+            
             this.socket.disconnect();
             this.socket.connect();
             this.showRoomSelection();
@@ -197,8 +267,132 @@ class RoomManager {
         Utils.showToast('Player left the room', 'info');
     }
 
+    handlePlayerDisconnected(data) {
+        console.log('Player disconnected:', data);
+        
+        // Clear any existing timer for this player
+        if (this.disconnectTimers[data.sessionId]) {
+            clearInterval(this.disconnectTimers[data.sessionId]);
+        }
+        
+        // Update game state
+        if (this.gameManager) {
+            this.gameManager.updateGameState(data.gameState);
+        }
+        
+        // Start countdown timer
+        const gracePeriodSeconds = Math.floor(data.gracePeriod / 1000);
+        let remainingSeconds = gracePeriodSeconds;
+        
+        // Show initial message
+        Utils.showToast(`${data.playerName} disconnected. Waiting ${remainingSeconds}s for reconnection...`, 'warning');
+        
+        // Update countdown every second
+        this.disconnectTimers[data.sessionId] = setInterval(() => {
+            remainingSeconds--;
+            if (remainingSeconds > 0) {
+                // Update player name display with countdown
+                if (this.gameManager) {
+                    this.gameManager.updateDisconnectedPlayerDisplay(data.sessionId, remainingSeconds);
+                }
+            } else {
+                clearInterval(this.disconnectTimers[data.sessionId]);
+                delete this.disconnectTimers[data.sessionId];
+            }
+        }, 1000);
+    }
+
+    handlePlayerReconnected(data) {
+        console.log('Player reconnected:', data);
+        
+        // Find the session ID that reconnected
+        const sessionIds = Object.keys(data.players);
+        for (const sessionId of sessionIds) {
+            if (this.disconnectTimers[sessionId]) {
+                clearInterval(this.disconnectTimers[sessionId]);
+                delete this.disconnectTimers[sessionId];
+            }
+        }
+        
+        if (this.gameManager) {
+            this.gameManager.updateGameState(data.gameState);
+        }
+        
+        Utils.showToast('Opponent reconnected!', 'success');
+    }
+
+    handlePlayerRemoved(data) {
+        console.log('Player removed after timeout:', data);
+        
+        // Clear timer if exists
+        if (this.disconnectTimers[data.sessionId]) {
+            clearInterval(this.disconnectTimers[data.sessionId]);
+            delete this.disconnectTimers[data.sessionId];
+        }
+        
+        // If the removed player is us, clear our room data
+        if (data.sessionId === this.sessionId) {
+            localStorage.removeItem('checkers_room_code');
+            localStorage.removeItem('checkers_player_name');
+            this.roomCode = '';
+            this.playerName = '';
+            this.showRoomSelection();
+            Utils.showToast('You were removed from the room due to disconnection. Please rejoin.', 'warning');
+        } else {
+            if (this.gameManager) {
+                this.gameManager.updateGameState(data.gameState);
+            }
+            Utils.showToast(`${data.playerName} was removed due to disconnection timeout`, 'info');
+        }
+    }
+
+    handleSessionRemoved(data) {
+        console.log('Session removed:', data);
+        
+        // If this is our session, clear localStorage
+        if (data.sessionId === this.sessionId) {
+            localStorage.removeItem('checkers_room_code');
+            localStorage.removeItem('checkers_player_name');
+            this.roomCode = '';
+            this.playerName = '';
+        }
+    }
+
+    handleReconnected(data) {
+        console.log('Successfully reconnected to game:', data);
+        
+        if (this.gameManager) {
+            this.gameManager.updateGameState(data.gameState);
+            this.gameManager.setSessionId(data.sessionId);
+        }
+        
+        // Ensure we're showing the game container
+        this.showGameContainer();
+        
+        Utils.showToast(data.message, 'success');
+    }
+
     handleError(data) {
         console.log('Error:', data);
+        
+        // If we get specific errors, clear the room data so we don't auto-rejoin
+        if (data.message === 'Room not found' || 
+            data.message === 'Room is full' ||
+            data.message === 'You are already in this room' ||
+            data.message.includes('removed')) {
+            localStorage.removeItem('checkers_room_code');
+            localStorage.removeItem('checkers_player_name');
+            this.roomCode = '';
+            this.playerName = '';
+            
+            // Make sure we show the room selection page
+            if (!this.roomSelection.classList.contains('hidden')) {
+                // Already showing, just display error
+            } else {
+                this.showRoomSelection();
+            }
+        }
+        
         Utils.showToast(data.message, 'error');
     }
 

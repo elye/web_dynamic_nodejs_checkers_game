@@ -7,6 +7,10 @@ class SocketController {
     constructor(io, gameController) {
         this.io = io;
         this.gameController = gameController;
+        this.socketToSession = {}; // socketId -> sessionId mapping
+        this.sessionToSocket = {}; // sessionId -> socketId mapping
+        this.disconnectTimers = {}; // sessionId -> timer
+        this.DISCONNECT_GRACE_PERIOD = 60000; // 60 seconds
     }
 
     /**
@@ -16,9 +20,9 @@ class SocketController {
         this.io.on('connection', (socket) => {
             console.log('User connected:', socket.id);
 
-            // Join room
-            socket.on('join-room', ({ roomCode, playerName }) => {
-                this.handleJoinRoom(socket, roomCode, playerName);
+            // Join room (with session support)
+            socket.on('join-room', ({ roomCode, playerName, sessionId }) => {
+                this.handleJoinRoom(socket, roomCode, playerName, sessionId);
             });
 
             // Handle move
@@ -61,42 +65,102 @@ class SocketController {
     /**
      * Handle player joining a room
      */
-    handleJoinRoom(socket, roomCode, playerName) {
+    handleJoinRoom(socket, roomCode, playerName, sessionId) {
         const game = this.gameController.getGame(roomCode);
         
         if (!game) {
             socket.emit('error', { message: 'Room not found' });
+            socket.emit('clear-session-data'); // Tell client to clear localStorage
             return;
         }
 
-        const success = game.addPlayer(socket.id, playerName);
+        // Check if this is a reconnection (player exists and is disconnected)
+        const isReconnecting = game.players[sessionId] && game.players[sessionId].disconnected;
         
-        if (!success) {
+        // If player exists but is NOT disconnected, they're trying to join twice - reject
+        if (game.players[sessionId] && !game.players[sessionId].disconnected) {
+            socket.emit('error', { message: 'You are already in this room' });
+            return;
+        }
+        
+        // If player doesn't exist and room is full, they might have been removed
+        if (!game.players[sessionId] && Object.keys(game.players).length >= 2) {
+            socket.emit('error', { message: 'Room is full' });
+            socket.emit('clear-session-data'); // Tell client to clear old session data
+            return;
+        }
+        
+        // Clear disconnect timer if reconnecting
+        if (isReconnecting && this.disconnectTimers[sessionId]) {
+            clearTimeout(this.disconnectTimers[sessionId]);
+            delete this.disconnectTimers[sessionId];
+        }
+        
+        // Update session mappings
+        const oldSocketId = this.sessionToSocket[sessionId];
+        if (oldSocketId) {
+            delete this.socketToSession[oldSocketId];
+        }
+        this.socketToSession[socket.id] = sessionId;
+        this.sessionToSocket[sessionId] = socket.id;
+
+        const result = game.addPlayer(sessionId, playerName, socket.id);
+        
+        if (result.success === false && !result.reconnected) {
             socket.emit('error', { message: 'Room is full' });
             return;
         }
 
         socket.join(roomCode);
         socket.roomCode = roomCode;
+        socket.sessionId = sessionId;
 
-        this.io.to(roomCode).emit('player-joined', {
-            players: game.players,
-            gameState: game.getGameState()
-        });
+        if (result.reconnected) {
+            // Player reconnected
+            console.log(`Player ${playerName} (session: ${sessionId}) reconnected to room ${roomCode}`);
+            
+            // Notify the reconnected player
+            socket.emit('reconnected', {
+                message: 'Successfully reconnected!',
+                gameState: game.getGameState(),
+                sessionId: sessionId
+            });
+            
+            // Notify other players
+            socket.to(roomCode).emit('player-reconnected', {
+                players: game.players,
+                gameState: game.getGameState()
+            });
+            
+            this.io.to(roomCode).emit('player-joined', {
+                players: game.players,
+                gameState: game.getGameState()
+            });
+        } else {
+            // New player joined
+            this.io.to(roomCode).emit('player-joined', {
+                players: game.players,
+                gameState: game.getGameState()
+            });
+        }
 
         socket.emit('game-state', game.getGameState());
         
         if (game.waitingForTurnOrderSelection) {
-            if (game.turnOrderSelector === socket.id) {
+            if (game.turnOrderSelector === sessionId) {
                 socket.emit('show-turn-order-selection', { canChoose: true });
             } else {
                 socket.emit('game-state', game.getGameState());
             }
             
-            if (game.turnOrderSelector && game.turnOrderSelector !== socket.id) {
-                const selectorSocket = this.io.sockets.sockets.get(game.turnOrderSelector);
-                if (selectorSocket) {
-                    selectorSocket.emit('show-turn-order-selection', { canChoose: true });
+            if (game.turnOrderSelector) {
+                // Find the socket for the turn order selector
+                const selectorSocketId = this.sessionToSocket[game.turnOrderSelector];
+                if (selectorSocketId) {
+                    const selectorSocket = this.io.sockets.sockets.get(selectorSocketId);
+                    if (selectorSocket) {
+                        selectorSocket.emit('show-turn-order-selection', { canChoose: true });
+                    }
                 }
             }
         }
@@ -112,8 +176,11 @@ class SocketController {
 
         const game = this.gameController.getGame(socket.roomCode);
         if (!game) return;
+        
+        const sessionId = this.socketToSession[socket.id];
+        if (!sessionId) return;
 
-        const result = game.makeMove(fromRow, fromCol, toRow, toCol, socket.id);
+        const result = game.makeMove(fromRow, fromCol, toRow, toCol, sessionId);
         
         if (result.success) {
             this.io.to(socket.roomCode).emit('move-made', {
@@ -145,8 +212,11 @@ class SocketController {
 
         const game = this.gameController.getGame(socket.roomCode);
         if (!game) return;
+        
+        const sessionId = this.socketToSession[socket.id];
+        if (!sessionId) return;
 
-        const result = game.selectTurnOrder(socket.id, choice);
+        const result = game.selectTurnOrder(sessionId, choice);
         
         if (result.success) {
             this.io.to(socket.roomCode).emit('turn-order-selected', {
@@ -170,8 +240,11 @@ class SocketController {
 
         const game = this.gameController.getGame(socket.roomCode);
         if (!game) return;
+        
+        const sessionId = this.socketToSession[socket.id];
+        if (!sessionId) return;
 
-        const result = game.requestNewGame(socket.id);
+        const result = game.requestNewGame(sessionId);
         
         if (result.approved) {
             if (result.bothAgreed) {
@@ -213,8 +286,11 @@ class SocketController {
 
         const game = this.gameController.getGame(socket.roomCode);
         if (!game) return;
+        
+        const sessionId = this.socketToSession[socket.id];
+        if (!sessionId) return;
 
-        game.cancelNewGameRequest(socket.id);
+        game.cancelNewGameRequest(sessionId);
         
         const requesterName = game.players[socket.id]?.name || 'Player';
         this.io.to(socket.roomCode).emit('new-game-request-cancelled', {
@@ -232,9 +308,12 @@ class SocketController {
 
         const game = this.gameController.getGame(socket.roomCode);
         if (!game) return;
+        
+        const sessionId = this.socketToSession[socket.id];
+        if (!sessionId) return;
 
         const piece = game.board[row][col];
-        if (!piece || piece.color !== game.players[socket.id]?.color) {
+        if (!piece || piece.color !== game.players[sessionId]?.color) {
             socket.emit('possible-moves', { moves: [] });
             return;
         }
@@ -260,19 +339,63 @@ class SocketController {
     handleDisconnect(socket) {
         console.log('User disconnected:', socket.id);
 
+        const sessionId = this.socketToSession[socket.id];
+        if (!sessionId) return;
+        
         if (socket.roomCode) {
             const game = this.gameController.getGame(socket.roomCode);
-            if (game) {
-                game.removePlayer(socket.id);
+            if (game && game.players[sessionId]) {
+                const player = game.players[sessionId];
                 
-                this.io.to(socket.roomCode).emit('player-left', {
+                // Mark player as disconnected in game
+                game.markPlayerDisconnected(sessionId);
+                
+                console.log(`Player ${player.name} (session: ${sessionId}) disconnected from room ${socket.roomCode}`);
+                
+                // Notify other players about disconnection
+                this.io.to(socket.roomCode).emit('player-disconnected', {
+                    sessionId,
+                    playerName: player.name,
                     players: game.players,
-                    gameState: game.getGameState()
+                    gameState: game.getGameState(),
+                    gracePeriod: this.DISCONNECT_GRACE_PERIOD
                 });
-
-                this.gameController.cleanupRoom(socket.roomCode);
+                
+                // Start grace period timer
+                this.disconnectTimers[sessionId] = setTimeout(() => {
+                    // Check if player is still disconnected
+                    if (game.players[sessionId] && game.players[sessionId].disconnected) {
+                        // Player didn't reconnect, remove them
+                        const removedPlayerColor = game.players[sessionId].color;
+                        game.removePlayer(sessionId);
+                        
+                        // Notify room
+                        this.io.to(socket.roomCode).emit('player-removed', {
+                            sessionId,
+                            playerName: player.name,
+                            players: game.players,
+                            gameState: game.getGameState()
+                        });
+                        
+                        // Emit to the specific session to clear localStorage
+                        // (in case they reconnect later)
+                        this.io.emit('session-removed', {
+                            sessionId,
+                            roomCode: socket.roomCode
+                        });
+                        
+                        // Cleanup session mappings
+                        delete this.disconnectTimers[sessionId];
+                        delete this.socketToSession[socket.id];
+                        delete this.sessionToSocket[sessionId];
+                        
+                        this.gameController.cleanupRoom(socket.roomCode);
+                    }
+                }, this.DISCONNECT_GRACE_PERIOD);
             }
         }
+        
+        // Note: We don't delete socket mappings here since player might reconnect
     }
 }
 

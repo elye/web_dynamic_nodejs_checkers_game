@@ -375,12 +375,8 @@ class RoomManager {
     handleReconnected(data) {
         console.log('Successfully reconnected to game:', data);
         
-        if (this.gameManager) {
-            this.gameManager.updateGameState(data.gameState);
-            this.gameManager.setSessionId(data.sessionId);
-        }
-        
         // Re-initialize countdown timers for any players who are still disconnected
+        // Do this BEFORE updating game state so the countdowns are ready
         if (data.disconnectedPlayers) {
             for (const disconnectedPlayer of data.disconnectedPlayers) {
                 const { sessionId, remainingSeconds } = disconnectedPlayer;
@@ -409,11 +405,13 @@ class RoomManager {
                     }
                 }, 1000);
             }
-            
-            // Update display to show countdown
-            if (this.gameManager) {
-                this.gameManager.updatePlayerNames();
-            }
+        }
+        
+        if (this.gameManager) {
+            this.gameManager.updateGameState(data.gameState);
+            this.gameManager.setSessionId(data.sessionId);
+            // Explicitly update player names after state is set
+            this.gameManager.updatePlayerNames();
         }
         
         // Ensure we're showing the game container

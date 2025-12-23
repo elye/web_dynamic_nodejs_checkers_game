@@ -464,13 +464,27 @@ class GameManager {
     updatePlayerNames() {
         if (!this.gameState) return;
         
+        // Get active countdown states from room manager
+        const countdowns = this.roomManager ? this.roomManager.getDisconnectCountdowns() : {};
+        
         const redPlayer = Object.values(this.gameState.players).find(p => p.color === 'red');
         const blackPlayer = Object.values(this.gameState.players).find(p => p.color === 'black');
         
         // Update red player name
         if (redPlayer) {
+            const redSessionId = Object.keys(this.gameState.players).find(
+                id => this.gameState.players[id] === redPlayer
+            );
             const redText = redPlayer.name;
-            const redStatus = redPlayer.disconnected ? ' (disconnected)' : '';
+            let redStatus = '';
+            
+            if (redPlayer.disconnected && countdowns[redSessionId] !== undefined) {
+                // Use the live countdown value
+                redStatus = ` (disconnected... ${countdowns[redSessionId]}s)`;
+            } else if (redPlayer.disconnected) {
+                redStatus = ' (disconnected)';
+            }
+            
             this.redPlayerName.textContent = redText + redStatus;
             this.redPlayerName.classList.toggle('disconnected', redPlayer.disconnected);
         } else {
@@ -480,28 +494,24 @@ class GameManager {
         
         // Update black player name
         if (blackPlayer) {
+            const blackSessionId = Object.keys(this.gameState.players).find(
+                id => this.gameState.players[id] === blackPlayer
+            );
             const blackText = blackPlayer.name;
-            const blackStatus = blackPlayer.disconnected ? ' (disconnected)' : '';
+            let blackStatus = '';
+            
+            if (blackPlayer.disconnected && countdowns[blackSessionId] !== undefined) {
+                // Use the live countdown value
+                blackStatus = ` (disconnected... ${countdowns[blackSessionId]}s)`;
+            } else if (blackPlayer.disconnected) {
+                blackStatus = ' (disconnected)';
+            }
+            
             this.blackPlayerName.textContent = blackText + blackStatus;
             this.blackPlayerName.classList.toggle('disconnected', blackPlayer.disconnected);
         } else {
             this.blackPlayerName.textContent = 'Waiting...';
             this.blackPlayerName.classList.remove('disconnected');
-        }
-    }
-
-    updateDisconnectedPlayerDisplay(sessionId, remainingSeconds) {
-        if (!this.gameState || !this.gameState.players[sessionId]) return;
-        
-        const player = this.gameState.players[sessionId];
-        const statusText = ` (disconnected... ${remainingSeconds}s)`;
-        
-        if (player.color === 'red') {
-            this.redPlayerName.textContent = player.name + statusText;
-            this.redPlayerName.classList.add('disconnected');
-        } else if (player.color === 'black') {
-            this.blackPlayerName.textContent = player.name + statusText;
-            this.blackPlayerName.classList.add('disconnected');
         }
     }
 

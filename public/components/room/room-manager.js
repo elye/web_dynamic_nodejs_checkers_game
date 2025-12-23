@@ -13,6 +13,7 @@ class RoomManager {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 10;
         this.disconnectTimers = {}; // Track disconnection timers for players
+        this.disconnectCountdowns = {}; // Track current countdown values for each player
         
         this.initializeElements();
         this.attachEventListeners();
@@ -275,14 +276,17 @@ class RoomManager {
             clearInterval(this.disconnectTimers[data.sessionId]);
         }
         
-        // Update game state
-        if (this.gameManager) {
-            this.gameManager.updateGameState(data.gameState);
-        }
-        
         // Start countdown timer
         const gracePeriodSeconds = Math.floor(data.gracePeriod / 1000);
         let remainingSeconds = gracePeriodSeconds;
+        
+        // Store countdown state BEFORE updating game state
+        this.disconnectCountdowns[data.sessionId] = remainingSeconds;
+        
+        // Update game state (this will now have access to countdown state)
+        if (this.gameManager) {
+            this.gameManager.updateGameState(data.gameState);
+        }
         
         // Show initial message
         Utils.showToast(`${data.playerName} disconnected. Waiting ${remainingSeconds}s for reconnection...`, 'warning');
@@ -290,14 +294,17 @@ class RoomManager {
         // Update countdown every second
         this.disconnectTimers[data.sessionId] = setInterval(() => {
             remainingSeconds--;
+            this.disconnectCountdowns[data.sessionId] = remainingSeconds;
+            
             if (remainingSeconds > 0) {
                 // Update player name display with countdown
                 if (this.gameManager) {
-                    this.gameManager.updateDisconnectedPlayerDisplay(data.sessionId, remainingSeconds);
+                    this.gameManager.updatePlayerNames();
                 }
             } else {
                 clearInterval(this.disconnectTimers[data.sessionId]);
                 delete this.disconnectTimers[data.sessionId];
+                delete this.disconnectCountdowns[data.sessionId];
             }
         }, 1000);
     }
@@ -305,17 +312,23 @@ class RoomManager {
     handlePlayerReconnected(data) {
         console.log('Player reconnected:', data);
         
-        // Find the session ID that reconnected
+        // Find which player reconnected (not disconnected anymore)
+        // Only clear timer for players who are no longer disconnected
         const sessionIds = Object.keys(data.players);
         for (const sessionId of sessionIds) {
-            if (this.disconnectTimers[sessionId]) {
+            const player = data.players[sessionId];
+            // If this player has a timer BUT is no longer disconnected, clear it
+            if (this.disconnectTimers[sessionId] && !player.disconnected) {
                 clearInterval(this.disconnectTimers[sessionId]);
                 delete this.disconnectTimers[sessionId];
+                delete this.disconnectCountdowns[sessionId];
             }
         }
         
         if (this.gameManager) {
             this.gameManager.updateGameState(data.gameState);
+            // Explicitly update player names to refresh countdown display
+            this.gameManager.updatePlayerNames();
         }
         
         Utils.showToast('Opponent reconnected!', 'success');
@@ -328,6 +341,7 @@ class RoomManager {
         if (this.disconnectTimers[data.sessionId]) {
             clearInterval(this.disconnectTimers[data.sessionId]);
             delete this.disconnectTimers[data.sessionId];
+            delete this.disconnectCountdowns[data.sessionId];
         }
         
         // If the removed player is us, clear our room data
@@ -366,6 +380,42 @@ class RoomManager {
             this.gameManager.setSessionId(data.sessionId);
         }
         
+        // Re-initialize countdown timers for any players who are still disconnected
+        if (data.disconnectedPlayers) {
+            for (const disconnectedPlayer of data.disconnectedPlayers) {
+                const { sessionId, remainingSeconds } = disconnectedPlayer;
+                
+                // Initialize countdown state
+                this.disconnectCountdowns[sessionId] = remainingSeconds;
+                
+                // Start countdown interval
+                if (this.disconnectTimers[sessionId]) {
+                    clearInterval(this.disconnectTimers[sessionId]);
+                }
+                
+                this.disconnectTimers[sessionId] = setInterval(() => {
+                    if (this.disconnectCountdowns[sessionId] !== undefined) {
+                        this.disconnectCountdowns[sessionId]--;
+                        
+                        if (this.gameManager) {
+                            this.gameManager.updatePlayerNames();
+                        }
+                        
+                        if (this.disconnectCountdowns[sessionId] <= 0) {
+                            clearInterval(this.disconnectTimers[sessionId]);
+                            delete this.disconnectTimers[sessionId];
+                            delete this.disconnectCountdowns[sessionId];
+                        }
+                    }
+                }, 1000);
+            }
+            
+            // Update display to show countdown
+            if (this.gameManager) {
+                this.gameManager.updatePlayerNames();
+            }
+        }
+        
         // Ensure we're showing the game container
         this.showGameContainer();
         
@@ -399,5 +449,9 @@ class RoomManager {
     updateRoomCode(roomCode) {
         this.roomCode = roomCode;
         this.currentRoomCode.textContent = roomCode;
+    }
+    
+    getDisconnectCountdowns() {
+        return this.disconnectCountdowns;
     }
 }

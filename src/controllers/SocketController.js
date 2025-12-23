@@ -92,7 +92,7 @@ class SocketController {
         
         // Clear disconnect timer if reconnecting
         if (isReconnecting && this.disconnectTimers[sessionId]) {
-            clearTimeout(this.disconnectTimers[sessionId]);
+            clearTimeout(this.disconnectTimers[sessionId].timer);
             delete this.disconnectTimers[sessionId];
         }
         
@@ -119,11 +119,26 @@ class SocketController {
             // Player reconnected
             console.log(`Player ${playerName} (session: ${sessionId}) reconnected to room ${roomCode}`);
             
+            // Get info about other disconnected players
+            const disconnectedPlayers = [];
+            for (const [sid, player] of Object.entries(game.players)) {
+                if (player.disconnected && sid !== sessionId) {
+                    const timerInfo = this.disconnectTimers[sid];
+                    if (timerInfo) {
+                        disconnectedPlayers.push({
+                            sessionId: sid,
+                            remainingSeconds: timerInfo.remainingSeconds
+                        });
+                    }
+                }
+            }
+            
             // Notify the reconnected player
             socket.emit('reconnected', {
                 message: 'Successfully reconnected!',
                 gameState: game.getGameState(),
-                sessionId: sessionId
+                sessionId: sessionId,
+                disconnectedPlayers: disconnectedPlayers
             });
             
             // Notify other players
@@ -361,37 +376,46 @@ class SocketController {
                     gracePeriod: this.DISCONNECT_GRACE_PERIOD
                 });
                 
-                // Start grace period timer
-                this.disconnectTimers[sessionId] = setTimeout(() => {
-                    // Check if player is still disconnected
-                    if (game.players[sessionId] && game.players[sessionId].disconnected) {
-                        // Player didn't reconnect, remove them
-                        const removedPlayerColor = game.players[sessionId].color;
-                        game.removePlayer(sessionId);
-                        
-                        // Notify room
-                        this.io.to(socket.roomCode).emit('player-removed', {
-                            sessionId,
-                            playerName: player.name,
-                            players: game.players,
-                            gameState: game.getGameState()
-                        });
-                        
-                        // Emit to the specific session to clear localStorage
-                        // (in case they reconnect later)
-                        this.io.emit('session-removed', {
-                            sessionId,
-                            roomCode: socket.roomCode
-                        });
-                        
-                        // Cleanup session mappings
-                        delete this.disconnectTimers[sessionId];
-                        delete this.socketToSession[socket.id];
-                        delete this.sessionToSocket[sessionId];
-                        
-                        this.gameController.cleanupRoom(socket.roomCode);
+                // Start grace period timer and track start time
+                const disconnectStartTime = Date.now();
+                this.disconnectTimers[sessionId] = {
+                    timer: setTimeout(() => {
+                        // Check if player is still disconnected
+                        if (game.players[sessionId] && game.players[sessionId].disconnected) {
+                            // Player didn't reconnect, remove them
+                            const removedPlayerColor = game.players[sessionId].color;
+                            game.removePlayer(sessionId);
+                            
+                            // Notify room
+                            this.io.to(socket.roomCode).emit('player-removed', {
+                                sessionId,
+                                playerName: player.name,
+                                players: game.players,
+                                gameState: game.getGameState()
+                            });
+                            
+                            // Emit to the specific session to clear localStorage
+                            // (in case they reconnect later)
+                            this.io.emit('session-removed', {
+                                sessionId,
+                                roomCode: socket.roomCode
+                            });
+                            
+                            // Cleanup session mappings
+                            delete this.disconnectTimers[sessionId];
+                            delete this.socketToSession[socket.id];
+                            delete this.sessionToSocket[sessionId];
+                            
+                            this.gameController.cleanupRoom(socket.roomCode);
+                        }
+                    }, this.DISCONNECT_GRACE_PERIOD),
+                    startTime: disconnectStartTime,
+                    get remainingSeconds() {
+                        const elapsed = Date.now() - disconnectStartTime;
+                        const remaining = Math.max(0, Math.ceil((60000 - elapsed) / 1000));
+                        return remaining;
                     }
-                }, this.DISCONNECT_GRACE_PERIOD);
+                };
             }
         }
         
